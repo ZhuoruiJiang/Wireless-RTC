@@ -1,0 +1,10 @@
+{
+  "method": "naive",
+  "predictor": "recent_max",
+  "episodes": 5,
+  "solve_rate": 1.0,
+  "requests": 38,
+  "prediction_exceedance_rate": 0.0,
+  "clipped_prefix_rate": 0.0,
+  "buffer_exhaustion_steps": 0
+}

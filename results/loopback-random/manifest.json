@@ -1,0 +1,21 @@
+{
+  "kind": "network_probe",
+  "host": "127.0.0.1",
+  "port": 63096,
+  "samples": 100,
+  "interval_ms": 0,
+  "payload_bytes": 1024,
+  "timeout": 10,
+  "delay_config": {
+    "kind": "uniform",
+    "low_ms": 10,
+    "high_ms": 70
+  },
+  "predictor": {
+    "kind": "max",
+    "window": 32
+  },
+  "platform": "Windows-10-10.0.26200-SP0",
+  "seed": 42,
+  "note": "hold_ms is artificial SERVER processing delay, not measured WiFi delay"
+}

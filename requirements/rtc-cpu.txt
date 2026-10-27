@@ -1,0 +1,20 @@
+# Versions follow the pinned upstream JAX/Flax generation.
+jax==0.4.35
+jaxlib==0.4.35
+numpy==1.26.4
+flax==0.10.2
+optax==0.2.4
+chex==0.1.88
+orbax-checkpoint==0.11.5
+einops==0.8.2
+jax2d==1.0.0
+gymnax==0.0.8
+distrax==0.1.5
+tensorflow-probability==0.25.0
+wandb==0.19.1
+safetensors
+pygame
+jaxgl
+
+imageio==2.38.1
+protobuf==5.29.5

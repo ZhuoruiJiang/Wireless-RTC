@@ -1,0 +1,46 @@
+{
+  "config": {
+    "seed": 42,
+    "episodes": 5,
+    "level": "worlds/l/grasp_easy.json",
+    "control_ms": 20,
+    "min_execution_steps": 4,
+    "delay": {
+      "kind": "uniform",
+      "low_ms": 20,
+      "high_ms": 80
+    },
+    "methods": [
+      "rtc",
+      "naive"
+    ],
+    "predictors": {
+      "recent_max": {
+        "kind": "max",
+        "window": 32,
+        "initial_ms": 60
+      },
+      "rolling_p95": {
+        "kind": "quantile",
+        "window": 32,
+        "quantile_level": 0.95,
+        "initial_ms": 60
+      }
+    }
+  },
+  "created_utc": "2026-10-27T19:54:09.277745+00:00",
+  "python": "3.11.17",
+  "git_commit": null,
+  "upstream_commit": "9296f31d62d5bfeb5779dcb2f9bcf71ca37f448b",
+  "git_dirty": true,
+  "kind": "pretrained_kinetix_logical_time",
+  "checkpoint": "C:\\Users\\jack_\\OneDrive\\Documents\\ChatGPT\\INF385C\\wireless-rtc\\checkpoints\\24\\policies\\worlds_l_grasp_easy.pkl",
+  "checkpoint_sha256": "1a274db5022b405edaf2c8438b5d4a9d1f73847e9a32922aecbdca0b0230c01d",
+  "parameters": 3072006,
+  "jax_version": "0.4.35",
+  "devices": [
+    "TFRT_CPU_0"
+  ],
+  "fallback": "zero action with physics still advancing",
+  "delay_units": "ms converted with ceil to controller steps"
+}

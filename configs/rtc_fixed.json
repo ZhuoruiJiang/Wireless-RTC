@@ -1,0 +1,22 @@
+{
+  "seed": 42,
+  "episodes": 5,
+  "level": "worlds/l/grasp_easy.json",
+  "control_ms": 20,
+  "min_execution_steps": 4,
+  "delay": {
+    "kind": "fixed",
+    "value_ms": 40
+  },
+  "methods": [
+    "rtc",
+    "naive"
+  ],
+  "predictors": {
+    "recent_max": {
+      "kind": "max",
+      "window": 32,
+      "initial_ms": 40
+    }
+  }
+}

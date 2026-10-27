@@ -1,0 +1,53 @@
+{
+  "config": {
+    "seed": 42,
+    "samples": 1000,
+    "warmup": 32,
+    "control_ms": 20,
+    "scoring_quantile": 0.95,
+    "sources": {
+      "fixed": {
+        "kind": "fixed",
+        "value_ms": 60
+      },
+      "random": {
+        "kind": "uniform",
+        "low_ms": 20,
+        "high_ms": 80
+      },
+      "bursty": {
+        "kind": "bursty",
+        "base_ms": 35,
+        "burst_ms": 120,
+        "jitter_ms": 5,
+        "p_enter": 0.03,
+        "p_leave": 0.15
+      }
+    },
+    "predictors": {
+      "recent_max": {
+        "kind": "max",
+        "window": 32,
+        "initial_ms": 60
+      },
+      "rolling_p95": {
+        "kind": "quantile",
+        "window": 32,
+        "quantile_level": 0.95,
+        "initial_ms": 60
+      },
+      "last_value": {
+        "kind": "last",
+        "window": 1,
+        "initial_ms": 60
+      }
+    }
+  },
+  "created_utc": "2026-10-27T19:51:59.789690+00:00",
+  "python": "3.11.17",
+  "git_commit": null,
+  "upstream_commit": "9296f31d62d5bfeb5779dcb2f9bcf71ca37f448b",
+  "git_dirty": true,
+  "trace_sha256": "dd6c11fcb12f5c4f40c19edbbc027ab367a7b16cede9c44829b4300ff09439c2",
+  "trace_path": "C:\\Users\\jack_\\OneDrive\\Documents\\ChatGPT\\INF385C\\wireless-rtc\\results\\loopback-random\\trace.csv"
+}

@@ -1,0 +1,14 @@
+{
+  "samples": 68,
+  "warmup_samples": 32,
+  "mae_ms": 29.459351461435503,
+  "bias_ms": 29.384951459873907,
+  "exceedance_rate": 0.04411764705882353,
+  "step_exceedance_rate": 0,
+  "mean_prefix_steps": 4,
+  "mean_overestimate_ms": 29.422151460654703,
+  "pinball_loss_ms": 1.5064475737744956,
+  "scoring_quantile": 0.95,
+  "actual_p50_ms": 39.67239998746663,
+  "actual_p95_ms": 69.12315500667319
+}

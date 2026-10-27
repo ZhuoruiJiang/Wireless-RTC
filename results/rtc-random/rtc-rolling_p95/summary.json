@@ -1,0 +1,10 @@
+{
+  "method": "rtc",
+  "predictor": "rolling_p95",
+  "episodes": 5,
+  "solve_rate": 1.0,
+  "requests": 41,
+  "prediction_exceedance_rate": 0.14634146341463414,
+  "clipped_prefix_rate": 0.0,
+  "buffer_exhaustion_steps": 0
+}

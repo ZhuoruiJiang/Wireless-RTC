@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.uv-cache/
+checkpoints/
+runs/
+.env
+
+.deps/
+.tmp/
+vendor/jaxued/
