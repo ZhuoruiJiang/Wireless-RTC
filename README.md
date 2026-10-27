@@ -127,6 +127,46 @@ The first inference includes JIT compilation; `host_inference_ms` is diagnostic,
 not a warmed-up inference benchmark.
 Five episodes per condition are only a functional smoke test.
 
+### Watch a run in your browser
+
+The optional viewer renders the actual Kinetix physics state without a desktop,
+X server, or browser on Cybertron. Run from the repository root on the server:
+
+```sh
+uv run --no-sync python -m wireless_rtc rtc --config configs/rtc_fixed.json --checkpoint checkpoints/24/policies/worlds_l_grasp_easy.pkl --output runs/rtc-view-001 --view --view-port 8080 --view-pace
+```
+
+If you require GPU execution, prefix that command with `JAX_PLATFORMS=cuda`
+after verifying your CUDA-enabled JAX environment. Rendering uses Pillow, already
+included by the RTC dependency stack; if missing, use `uv pip install Pillow`.
+Do not reinstall the CPU requirements over a working GPU environment.
+
+In a separate terminal **on your laptop**, keep this SSH tunnel running:
+
+```sh
+ssh -N -o ExitOnForwardFailure=yes -L 8080:127.0.0.1:8080 zhuorui@cybertron5.csres.utexas.edu
+```
+
+Open <http://localhost:8080> on your laptop. The page shows MJPEG frames plus
+method, predictor, episode, simulation tick, success, and injected/predicted delay.
+The viewer starts before loading/compiling the policy; the first frame can take
+a while, especially during JAX compilation. Render errors appear on the page.
+After completion, the viewer retains the final frame and stays open until Ctrl+C.
+Use a fresh output directory on each run. Ctrl+C during a run stops it; partial
+output is not a completed experiment.
+
+`--view-fps 10` caps rendering at ten frames per wall-clock second (range: >0 to
+60). Rendering and browser delivery use separate threads and retain only the
+latest state/frame, so slow viewers skip frames instead of queuing simulator
+steps. `--view-pace` limits stepping to at most the configured control rate
+(50 steps/s at 20 ms) so fast runs are watchable; compilation/inference can make
+it slower. Omit pacing to run at full speed, which may skip entire short episodes.
+This remains the **logical-time, injected-delay experiment**, not live policy RPC.
+
+Viewing adds GPU/CPU contention and pacing overhead. Disable `--view` for timing
+measurements. The manifest records whether viewing/pacing was enabled. The viewer
+binds only to `127.0.0.1`; access it through SSH. It does not need a public port.
+
 For server GPU use, install a compatible Linux CUDA JAX build for the server GPU/driver
 instead of the CPU build. The upstream JAX 0.4.35 stack may need adaptation on newer GPUs;
 do not assume it supports your laptop GPU. CPU is sufficient to begin functional tests.

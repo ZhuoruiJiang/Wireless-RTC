@@ -49,7 +49,19 @@ def main(argv=None):
     sim.add_argument("--config", default="configs/rtc_fixed.json")
     sim.add_argument("--checkpoint", required=True)
     sim.add_argument("--output", required=True)
+    sim.add_argument("--view", action="store_true", help="Stream simulation frames on a loopback web viewer")
+    sim.add_argument("--view-port", type=int, default=8080)
+    sim.add_argument("--view-fps", type=float, default=10, help="Maximum rendered frames/second (default: 10)")
+    sim.add_argument("--view-pace", action="store_true", help="With --view, limit stepping to the configured control rate")
     args = parser.parse_args(argv)
+    if args.command == "rtc":
+        if args.view_pace and not args.view:
+            parser.error("--view-pace requires --view")
+        if not 1 <= args.view_port <= 65535:
+            parser.error("--view-port must be in [1,65535]")
+        import math
+        if not math.isfinite(args.view_fps) or not 0 < args.view_fps <= 60:
+            parser.error("--view-fps must be in (0,60]")
     if args.command == "serve":
         from wireless_rtc.server.service import serve
         policy = None
@@ -67,7 +79,21 @@ def main(argv=None):
     elif args.command == "rtc":
         from wireless_rtc.simulation.kinetix import run_experiment
         config = json.loads(Path(args.config).read_text(encoding="utf-8"))
-        run_experiment(config, args.checkpoint, args.output, metadata(config))
+        if not args.view:
+            run_experiment(config, args.checkpoint, args.output, metadata(config))
+        else:
+            import time
+            from wireless_rtc.simulation.viewer import SimulationViewer
+            with SimulationViewer(args.view_port, args.view_fps) as viewer:
+                print(f"RTC viewer: http://127.0.0.1:{viewer.port} (forward this port over SSH)", flush=True)
+                try:
+                    run_experiment(config, args.checkpoint, args.output, metadata(config),
+                                   viewer=viewer, view_pace=args.view_pace)
+                    print("Run complete. Viewer remains open; press Ctrl+C to exit.", flush=True)
+                    while True:
+                        time.sleep(.5)
+                except KeyboardInterrupt:
+                    print("Stopping RTC viewer.", flush=True)
     else:
         config = json.loads(Path(args.config).read_text(encoding="utf-8"))
         output = Path(args.output)

@@ -39,8 +39,9 @@ class KinetixPolicy:
         self.jax, self.jnp, nnx, self.np, kenv, saving, model = dependencies()
         jax, jnp = self.jax, self.jnp
         self.level, static, self.params = saving.load_from_json_file(str(UPSTREAM / level))
+        self.static = static.replace(screen_dim=(512,512))
         self.env = kenv.make_kinetix_env_from_name(
-            "Kinetix-Symbolic-Continuous-v1", static_env_params=static.replace(screen_dim=(512,512)))
+            "Kinetix-Symbolic-Continuous-v1", static_env_params=self.static)
         obs, _ = self.env.reset_to_level(jax.random.key(seed), self.level, self.params)
         self.action_dim = self.env.action_space(self.params).shape[0]
         self.policy = model.FlowPolicy(obs_dim=obs.shape[-1], action_dim=self.action_dim,
@@ -69,6 +70,27 @@ class KinetixPolicy:
         self.rng,key = self.jax.random.split(self.rng)
         return key
 
+    def make_frame_renderer(self):
+        # Import/compile lazily on the viewer thread; normal runs pay no rendering cost.
+        render = None
+
+        def jpeg(state):
+            nonlocal render
+            import io
+            from PIL import Image
+            if render is None:
+                from kinetix.render.renderer_pixels import make_render_pixels
+                pixels = make_render_pixels(self.params, self.static.replace(downscale=2))
+                # Match upstream video orientation: x/y transpose, then vertical flip.
+                render = self.jax.jit(lambda s: pixels(s).round().clip(0,255)
+                                      .astype(self.jnp.uint8).transpose(1,0,2)[::-1])
+            frame = self.np.asarray(render(state))
+            output = io.BytesIO()
+            Image.fromarray(frame).save(output, format="JPEG", quality=80)
+            return output.getvalue()
+
+        return jpeg
+
     def infer(self, request):
         jnp, np = self.jnp, self.np
         obs = jnp.asarray(request["observation"], dtype=jnp.float32)
@@ -86,12 +108,14 @@ class KinetixPolicy:
                     inference_ms=(time.perf_counter()-start)*1000)
 
 
-def run_experiment(config, checkpoint, output, metadata):
+def run_experiment(config, checkpoint, output, metadata, viewer=None, view_pace=False):
     if config["episodes"] < 1 or config["min_execution_steps"] < 1:
         raise ValueError("episodes and min_execution_steps must be positive")
     output = Path(output)
     output.mkdir(parents=True, exist_ok=False)
     backend = KinetixPolicy(checkpoint,config["level"],config["seed"])
+    if viewer is not None:
+        viewer.set_renderer(backend.make_frame_renderer())
     jax,jnp,np = backend.jax,backend.jnp,backend.np
     H = backend.horizon
     if config["min_execution_steps"] >= H:
@@ -103,6 +127,8 @@ def run_experiment(config, checkpoint, output, metadata):
                     fallback="zero action with physics still advancing",
                     delay_units="ms converted with ceil to controller steps",
                     config=config)
+    metadata["viewer"] = dict(enabled=viewer is not None, paced=view_pace,
+                              fps=viewer.fps if viewer is not None else None)
     (output/"manifest.json").write_text(json.dumps(metadata,indent=2),encoding="utf-8")
     summaries = []
     for method in config.get("methods",["rtc","naive"]):
@@ -123,6 +149,10 @@ def run_experiment(config, checkpoint, output, metadata):
                 obs,state = backend.reset(reset_key)
                 previous = np.asarray(backend.plain(backend.next_key(),obs[None])[0])
                 valid, tick, solved, exhausted_total = H, 0, False, 0
+                if viewer is not None:
+                    viewer.update(state, phase="Running", method=method, predictor=predictor_name,
+                                  episode=episode+1, episodes=config["episodes"], tick=0,
+                                  simulation_ms=0, success=False)
                 for request_index,actual_ms in enumerate(delays):
                     prediction_ms = predictor.predict()
                     raw_d = delay_steps(prediction_ms,config["control_ms"])
@@ -145,11 +175,18 @@ def run_experiment(config, checkpoint, output, metadata):
                     done = False
                     executed = 0
                     for action in actions:
+                        step_started = time.monotonic() if view_pace else None
                         env_key,step_key = jax.random.split(env_key)
                         obs,state,reward,done,info = backend.step(step_key,state,jnp.asarray(action))
                         tick += 1
                         executed += 1
                         solved = solved or bool(info.get("success",reward > 0))
+                        if viewer is not None:
+                            viewer.update(state, phase="Running", tick=tick,
+                                          simulation_ms=tick*config["control_ms"], success=solved,
+                                          predicted_ms=prediction_ms, actual_ms=actual_ms)
+                        if view_pace:
+                            time.sleep(max(0,config["control_ms"]/1000 - (time.monotonic()-step_started)))
                         if bool(done):
                             break
                     exhausted = sum(1 for k in range(executed) if k < actual_d and k >= valid)
@@ -186,3 +223,5 @@ def run_experiment(config, checkpoint, output, metadata):
             print(json.dumps(summary),flush=True)
             (directory/"summary.json").write_text(json.dumps(summary,indent=2),encoding="utf-8")
     (output/"summary.json").write_text(json.dumps(summaries,indent=2),encoding="utf-8")
+    if viewer is not None:
+        viewer.update(phase="Completed. Last frame retained; Ctrl+C in the server terminal closes the viewer.")
