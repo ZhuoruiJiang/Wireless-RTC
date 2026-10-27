@@ -30,11 +30,19 @@ Synthetic prediction results must not be described as campus WiFi or robot succe
 ## Quick start: prediction pipeline (Windows or Linux, Python 3.11)
 
 Install [uv](https://docs.astral.sh/uv/getting-started/installation/) first,
-then run these commands from the repository root. Deactivate any unrelated
-virtual environment before starting:
+and Git. For a new checkout:
 
 ```sh
-uv venv --python 3.11
+git clone https://github.com/ZhuoruiJiang/Wireless-RTC.git
+cd Wireless-RTC
+```
+
+Run the following from the repository root. Deactivate any unrelated virtual
+environment before starting. Each collaborator creates their own `.venv`;
+do not copy or share a virtual-environment directory between machines.
+
+```sh
+uv venv --python 3.11 .venv
 uv pip install -e .
 uv run --no-sync python -m wireless_rtc prediction-suite --config configs/first_run.json --output runs/prediction-001
 uv run --no-sync python -m unittest discover -s tests -v
@@ -44,6 +52,9 @@ No third-party runtime dependencies are needed for prediction/probing.
 This creates a project-local `.venv` using Python 3.11, which matches the pinned
 RTC dependency stack. `uv pip install` targets that environment, and the editable
 installation picks up source changes without reinstalling. `.venv` is gitignored.
+The project configures uv to copy installed files instead of hardlinking from its
+cache, which avoids OneDrive's incompatible-hardlink errors. No activation or
+`.deps/client` environment is needed for the documented setup.
 
 No shell activation is required. Use `uv run --no-sync` throughout this README
 to execute commands in `.venv` while preserving the optional RTC packages
@@ -63,6 +74,57 @@ listed in `requirements/rtc-cpu.txt`, rather than a project `uv.lock`.
 Open `comparison.csv` and each `prediction.svg` under the output folder.
 Each source has 1,000 requests; 32 are warmup. Configurations are fixed in advance.
 Use a new output directory each run.
+
+## Set up a laptop for live simulation
+
+Complete the quick-start `.venv` setup above. These additional commands work from
+the repository root on Windows or Linux and install the CPU physics/rendering
+stack into that **same `.venv`**:
+
+```sh
+git submodule update --init --recursive
+uv pip install --link-mode copy -e . -r requirements/rtc-cpu.txt
+uv pip install --link-mode copy --no-deps -e vendor/rtc-kinetix/third_party/kinetix "jaxued @ git+https://github.com/DramaCow/jaxued.git@62d155ae772aa2a0ecac9541d498df7ae88e6def"
+```
+
+The upstream packages deliberately use `--no-deps`: their original dependency
+declarations conflict with the pinned working stack. Install the CPU requirements
+first, then these two upstream packages. The laptop needs no policy checkpoint,
+CUDA toolkit, or administrator privileges. Do not run this CPU setup over a
+working CUDA-enabled **server** environment.
+
+Verify the interpreter, command, dependencies, and actual simulator initialization:
+
+```sh
+uv run --no-sync python -c "import sys; print(sys.executable)"
+uv run --no-sync python -m wireless_rtc rtc-live --help
+uv run --no-sync python -c "from wireless_rtc.simulation.kinetix import KinetixSimulator; s=KinetixSimulator(); print('Simulator ready:', s.observation_dim, 'observation values,', s.action_dim, 'actions')"
+uv run --no-sync python -m unittest discover -s tests -v
+```
+
+The interpreter must be inside this checkout's `.venv` (`Scripts/python.exe` on
+Windows; `bin/python` on Linux). Checkpoint tests skip unless `RTC_CHECKPOINT` is
+set; the client setup does not require it. Follow
+[the live pipeline instructions](#live-client-simulation-with-server-policy-inference)
+below to start the server, SSH tunnel, and local viewer. If viewer port 8080 is
+occupied, pass `--view-port 18080` and open <http://localhost:18080>.
+
+### Existing Windows environment fails with access denied
+
+If installing into an old `.venv` fails to remove package metadata, stop processes
+using that environment and preserve it before rebuilding. From the project root
+in PowerShell, choose an unused backup name:
+
+```powershell
+New-Item -ItemType Directory -Force .deps | Out-Null
+Move-Item -LiteralPath .venv -Destination .deps/venv-backup
+uv venv --python 3.11 .venv
+```
+
+Then repeat the laptop installation and verification commands above. The `.deps`
+folder is ignored by Git. This preserves the old environment without deleting it
+or changing its access permissions. Continue using `uv run --no-sync` with the new
+standard `.venv`.
 
 ## Measure Cybertron latency
 
@@ -193,8 +255,8 @@ Only load trusted pickle checkpoints. Checkpoints and large logs are gitignored.
 The **laptop** owns Kinetix physics, delay prediction, action buffering, and the
 browser viewer. The **server** owns the pretrained policy and checkpoint.
 Only observations/action chunks cross the network; video frames stay on the laptop.
-The client needs the CPU Kinetix dependencies and pinned submodules from the setup
-above, including `jaxued`, but does **not** need a checkpoint. Use the same repository
+Use [the laptop setup](#set-up-a-laptop-for-live-simulation) above to prepare the
+client's standard `.venv`; the client does **not** need a checkpoint. Use the same repository
 revision and level on both machines. Preserve the CUDA-enabled environment on the
 server; do not reinstall the CPU requirements there.
 
