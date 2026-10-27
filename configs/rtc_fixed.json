@@ -1,12 +1,12 @@
 {
   "seed": 42,
-  "episodes": 5,
+  "episodes": 50,
   "level": "worlds/l/grasp_easy.json",
   "control_ms": 20,
   "min_execution_steps": 4,
   "delay": {
     "kind": "fixed",
-    "value_ms": 40
+    "value_ms": 150
   },
   "methods": [
     "rtc",
