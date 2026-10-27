@@ -5,6 +5,7 @@ import threading
 import unittest
 from unittest.mock import patch
 from urllib.request import urlopen
+from urllib.error import HTTPError
 
 from wireless_rtc.cli import main
 from wireless_rtc.simulation.viewer import SimulationViewer
@@ -16,7 +17,7 @@ class ViewerTests(unittest.TestCase):
         with SimulationViewer(port=0, fps=60) as viewer:
             base = f"http://127.0.0.1:{viewer.port}"
             with urlopen(base, timeout=3) as response:
-                self.assertIn(b'src="/stream.mjpg"', response.read())
+                self.assertIn(b'src="/frame.jpg"', response.read())
                 self.assertEqual(response.headers["Cache-Control"], "no-store")
             viewer.set_renderer(lambda state: jpeg)
             viewer.update(object(), phase="Running", tick=12, success=False)
@@ -35,8 +36,35 @@ class ViewerTests(unittest.TestCase):
                 length = int(response.readline().split(b":")[1])
                 self.assertEqual(response.readline(), b"\r\n")
                 self.assertEqual(response.read(length), jpeg)
+                # A single final image must have a completed multipart delimiter.
+                self.assertEqual(response.readline(), b"\r\n")
+                self.assertEqual(response.readline(), b"--frame\r\n")
             finally:
                 connection.close()
+
+    def test_snapshot_waits_then_serves_final_frame_and_reconnects(self):
+        jpeg = b"\xff\xd8final-frame\xff\xd9"
+        with SimulationViewer(port=0) as viewer:
+            url = f"http://127.0.0.1:{viewer.port}/frame.jpg"
+            with self.assertRaises(HTTPError) as error:
+                urlopen(url,timeout=3)
+            self.assertEqual(error.exception.code,503)
+            self.assertEqual(error.exception.headers["Retry-After"],"1")
+            error.exception.close()
+            viewer.set_renderer(lambda state:jpeg)
+            viewer.update(object(),phase="Completed")
+            with viewer._condition:
+                ready = viewer._condition.wait_for(lambda:viewer._jpeg is not None,timeout=3)
+            self.assertTrue(ready)
+            # Browser retries, late connections, and refreshes all get a finite JPEG
+            # response even though no further simulation states are produced.
+            for suffix in ["", "?v=1", "?v=2"]:
+                with urlopen(url+suffix,timeout=3) as response:
+                    self.assertEqual(response.headers["Content-Type"],"image/jpeg")
+                    self.assertEqual(response.headers["Cache-Control"],"no-store")
+                    self.assertEqual(response.read(),jpeg)
+            self.assertTrue(viewer.status()["frame_ready"])
+            self.assertEqual(viewer.status()["frame_sequence"],1)
 
     def test_slow_renderer_drops_intermediate_states(self):
         started, release, latest_rendered = threading.Event(), threading.Event(), threading.Event()
@@ -85,7 +113,7 @@ class ViewerTests(unittest.TestCase):
             connection.request("GET", "/stream.mjpg")
             response = connection.getresponse()
             viewer.close()
-            self.assertEqual(response.read(), b"")
+            self.assertEqual(response.read(), b"--frame\r\n")
             self.assertFalse(viewer._render_thread.is_alive())
             self.assertFalse(viewer._http_thread.is_alive())
         finally:

@@ -209,11 +209,14 @@ In a separate terminal **on your laptop**, keep this SSH tunnel running:
 ssh -N -o ExitOnForwardFailure=yes -L 8080:127.0.0.1:8080 zhuorui@cybertron5.csres.utexas.edu
 ```
 
-Open <http://localhost:8080> on your laptop. The page shows MJPEG frames plus
+Open <http://localhost:8080> on your laptop. The page shows simulation frames plus
 method, predictor, episode, simulation tick, success, and injected/predicted delay.
 The viewer starts before loading/compiling the policy; the first frame can take
 a while, especially during JAX compilation. Render errors appear on the page.
 After completion, the viewer retains the final frame and stays open until Ctrl+C.
+The page polls finite JPEG responses and retries automatically after startup or a
+connection interruption, so a late browser can display the final frame too. The
+optional `/stream.mjpg` endpoint remains available for direct MJPEG clients.
 Use a fresh output directory on each run. Ctrl+C during a run stops it; partial
 output is not a completed experiment.
 
