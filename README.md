@@ -29,26 +29,47 @@ Synthetic prediction results must not be described as campus WiFi or robot succe
 
 ## Quick start: prediction pipeline (Windows or Linux, Python 3.11)
 
-From the repository root:
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/) first,
+then run these commands from the repository root. Deactivate any unrelated
+virtual environment before starting:
 
 ```sh
-python -m pip install -e .
-python -m wireless_rtc prediction-suite --config configs/first_run.json --output runs/prediction-001
-python -m unittest discover -s tests -v
+uv venv --python 3.11
+uv pip install -e .
+uv run --no-sync python -m wireless_rtc prediction-suite --config configs/first_run.json --output runs/prediction-001
+uv run --no-sync python -m unittest discover -s tests -v
 ```
 
 No third-party runtime dependencies are needed for prediction/probing.
-Alternatively use `uv sync` and prefix commands with `uv run`.
+This creates a project-local `.venv` using Python 3.11, which matches the pinned
+RTC dependency stack. `uv pip install` targets that environment, and the editable
+installation picks up source changes without reinstalling. `.venv` is gitignored.
+
+No shell activation is required. Use `uv run --no-sync` throughout this README
+to execute commands in `.venv` while preserving the optional RTC packages
+installed below. Running `uv sync` or plain `uv run` can remove those packages
+because they are not declared in the minimal `pyproject.toml`.
+
+Check the selected interpreter with:
+
+```sh
+uv run --no-sync python -c "import sys; print(sys.executable)"
+```
+
+Install additional packages with `uv pip install <package>`. These instructions
+use uv's virtual-environment and pip interface; RTC dependency versions are
+listed in `requirements/rtc-cpu.txt`, rather than a project `uv.lock`.
+
 Open `comparison.csv` and each `prediction.svg` under the output folder.
 Each source has 1,000 requests; 32 are warmup. Configurations are fixed in advance.
 Use a new output directory each run.
 
 ## Measure Cybertron latency
 
-On Cybertron, run the probe server:
+On Cybertron, repeat the virtual-environment setup above in its repository checkout, then run the probe server:
 
 ```sh
-python -m wireless_rtc serve --host 127.0.0.1 --port 8765
+uv run --no-sync python -m wireless_rtc serve --host 127.0.0.1 --port 8765
 ```
 
 On your laptop, create an SSH tunnel in a separate terminal:
@@ -60,8 +81,8 @@ ssh -N -L 8765:127.0.0.1:8765 zhuorui@cybertron5.csres.utexas.edu
 Then measure from your laptop:
 
 ```sh
-python -m wireless_rtc probe --host 127.0.0.1 --port 8765 --samples 300 --output runs/campus-001
-python -m wireless_rtc evaluate-trace --trace runs/campus-001/trace.csv --output runs/campus-eval-001
+uv run --no-sync python -m wireless_rtc probe --host 127.0.0.1 --port 8765 --samples 300 --output runs/campus-001
+uv run --no-sync python -m wireless_rtc evaluate-trace --trace runs/campus-001/trace.csv --output runs/campus-eval-001
 ```
 
 RTT includes serialization, transport, server processing, and decoding, but excludes
@@ -79,17 +100,22 @@ offline trace evaluation deliberately rejects censored rows until handled explic
 
 ## Pretrained RTC / Kinetix
 
+Complete the virtual-environment setup above first. Install the CPU simulation
+dependencies into the same `.venv` using the commands below. These experiments
+run locally without a remote server; installation and checkpoint download need
+Internet access.
+
 Keep upstream unmodified. Pinned RTC revision:
 `9296f31d62d5bfeb5779dcb2f9bcf71ca37f448b`.
 
 ```sh
 git submodule update --init --recursive
-python -m pip install -r requirements/rtc-cpu.txt
-python -m pip install --no-deps -e vendor/rtc-kinetix/third_party/kinetix
-python -m pip install --no-deps "jaxued @ git+https://github.com/DramaCow/jaxued.git@62d155ae772aa2a0ecac9541d498df7ae88e6def"
-python scripts/download_checkpoint.py --epoch 24 --level grasp_easy
-python -m wireless_rtc rtc --config configs/rtc_fixed.json --checkpoint checkpoints/24/policies/worlds_l_grasp_easy.pkl --output runs/rtc-fixed-001
-python -m wireless_rtc rtc --config configs/rtc_random.json --checkpoint checkpoints/24/policies/worlds_l_grasp_easy.pkl --output runs/rtc-random-001
+uv pip install -r requirements/rtc-cpu.txt
+uv pip install --no-deps -e vendor/rtc-kinetix/third_party/kinetix
+uv pip install --no-deps "jaxued @ git+https://github.com/DramaCow/jaxued.git@62d155ae772aa2a0ecac9541d498df7ae88e6def"
+uv run --no-sync python scripts/download_checkpoint.py --epoch 24 --level grasp_easy
+uv run --no-sync python -m wireless_rtc rtc --config configs/rtc_fixed.json --checkpoint checkpoints/24/policies/worlds_l_grasp_easy.pkl --output runs/rtc-fixed-001
+uv run --no-sync python -m wireless_rtc rtc --config configs/rtc_random.json --checkpoint checkpoints/24/policies/worlds_l_grasp_easy.pkl --output runs/rtc-random-001
 ```
 
 This runner uses the actual pretrained upstream flow policy and guided RTC;
@@ -109,13 +135,13 @@ Optional actual-checkpoint test (PowerShell):
 
 ```powershell
 $env:RTC_CHECKPOINT = "checkpoints/24/policies/worlds_l_grasp_easy.pkl"
-python -m unittest discover -s tests -v
+uv run --no-sync python -m unittest discover -s tests -v
 ```
 
 To enable policy RPC on the server:
 
 ```sh
-python -m wireless_rtc serve --checkpoint checkpoints/24/policies/worlds_l_grasp_easy.pkl
+uv run --no-sync python -m wireless_rtc serve --checkpoint checkpoints/24/policies/worlds_l_grasp_easy.pkl
 ```
 
 Requests carry observation, aligned previous actions, predicted prefix steps,
