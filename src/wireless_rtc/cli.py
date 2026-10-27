@@ -53,8 +53,18 @@ def main(argv=None):
     sim.add_argument("--view-port", type=int, default=8080)
     sim.add_argument("--view-fps", type=float, default=10, help="Maximum rendered frames/second (default: 10)")
     sim.add_argument("--view-pace", action="store_true", help="With --view, limit stepping to the configured control rate")
+    live = commands.add_parser("rtc-live", help="Paced local Kinetix simulator using a remote policy server")
+    live.add_argument("--config", default="configs/rtc_remote.json")
+    live.add_argument("--host", default="127.0.0.1")
+    live.add_argument("--port", type=int, default=8765)
+    live.add_argument("--timeout", type=float, default=120, help="RPC timeout in seconds; includes startup warmup")
+    live.add_argument("--output", required=True)
+    live.add_argument("--view", action="store_true", help="Show simulation on a local browser viewer")
+    live.add_argument("--view-port", type=int, default=8080)
+    live.add_argument("--view-fps", type=float, default=10)
+    live.set_defaults(view_pace=False)
     args = parser.parse_args(argv)
-    if args.command == "rtc":
+    if args.command in {"rtc", "rtc-live"}:
         if args.view_pace and not args.view:
             parser.error("--view-pace requires --view")
         if not 1 <= args.view_port <= 65535:
@@ -62,6 +72,9 @@ def main(argv=None):
         import math
         if not math.isfinite(args.view_fps) or not 0 < args.view_fps <= 60:
             parser.error("--view-fps must be in (0,60]")
+        if args.command == "rtc-live" and (
+                not math.isfinite(args.timeout) or args.timeout <= 0 or not 1 <= args.port <= 65535):
+            parser.error("rtc-live requires a positive finite timeout and port in [1,65535]")
     if args.command == "serve":
         from wireless_rtc.server.service import serve
         policy = None
@@ -76,19 +89,26 @@ def main(argv=None):
             source = {"kind":"uniform","low_ms":10,"high_ms":70}
         print(run_probe(args.host,args.port,args.output,args.samples,args.interval_ms,
                         args.payload_bytes,source,seed=args.seed))
-    elif args.command == "rtc":
-        from wireless_rtc.simulation.kinetix import run_experiment
+    elif args.command in {"rtc", "rtc-live"}:
         config = json.loads(Path(args.config).read_text(encoding="utf-8"))
+        def run(viewer=None):
+            if args.command == "rtc":
+                from wireless_rtc.simulation.kinetix import run_experiment
+                return run_experiment(config,args.checkpoint,args.output,metadata(config),
+                                      viewer=viewer,view_pace=args.view_pace)
+            from wireless_rtc.client.live import run_remote
+            return run_remote(config,args.host,args.port,args.output,metadata(config),
+                              timeout=args.timeout,viewer=viewer)
         if not args.view:
-            run_experiment(config, args.checkpoint, args.output, metadata(config))
+            run()
         else:
             import time
             from wireless_rtc.simulation.viewer import SimulationViewer
             with SimulationViewer(args.view_port, args.view_fps) as viewer:
-                print(f"RTC viewer: http://127.0.0.1:{viewer.port} (forward this port over SSH)", flush=True)
+                location = "local browser" if args.command == "rtc-live" else "forward this port over SSH"
+                print(f"RTC viewer: http://127.0.0.1:{viewer.port} ({location})", flush=True)
                 try:
-                    run_experiment(config, args.checkpoint, args.output, metadata(config),
-                                   viewer=viewer, view_pace=args.view_pace)
+                    run(viewer)
                     print("Run complete. Viewer remains open; press Ctrl+C to exit.", flush=True)
                     while True:
                         time.sleep(.5)

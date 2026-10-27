@@ -9,8 +9,8 @@ No learned predictor or telemetry feature tuning is part of this stage.
    estimate suitable for drawing scientific conclusions.
 3. Measure real RTT to Cybertron with the probe service, repeat across WiFi sessions.
 4. Evaluate the same predictors chronologically on those held-out traces.
-5. Add a paced live simulator client and compare with replay before claiming live
-   wireless robot-control performance.
+5. Run the paced live simulator client (`rtc-live`) and compare with replay before
+   claiming live wireless robot-control performance.
 
 ## Timing contract
 
@@ -31,6 +31,33 @@ This is not a safe real-robot fallback and is not intended for hardware use.
 Offline logical-time delays include the WHOLE modeled response budget; actual host
 inference time is measured separately and is not added a second time.
 The initial action chunk is generated before the episode controller begins.
+
+## Live RPC timing contract
+
+`rtc-live` executes local physics while one background policy RPC is in flight.
+It uses actual measured response delay, with no synthetic delay injection. Requests
+carry the observation tick and a previous chunk aligned to that tick. Prefix
+guidance is based only on completed past responses. A chunk received at simulation
+tick `r` for observation tick `t` is used from index `r-t` onwards, never index zero.
+Chunks with `r-t >= H` are discarded. Buffer exhaustion advances physics with zero
+actions. Successful expired responses still contribute to delay history. Responses
+drained after an episode ends are logged but never applied or fed to its predictor.
+
+The clock starts after physics/policy warmup and an initial plain chunk. Server RNG
+and predictor history reset each episode. In-flight requests are drained before
+starting a new episode. Both RTC and naive use the same controller; the server
+selects guided or plain inference. Real network conditions differ between runs.
+
+RTT is measured from request submission through response validation on the client.
+It includes local worker dispatch/serialization, transport, policy inference and
+decoding. It excludes SSH/TCP connection setup and episode initialization. Responses
+are consumed at the next available controller boundary. `ideal_delay_steps` derives
+from wall-clock RTT, but alignment uses `elapsed_ticks` at actual application; these
+can differ if local physics overruns the control budget. Controller-work overruns
+and buffer exhaustion are recorded per tick. The controller does not accelerate
+physics to catch up after missed deadlines. Viewer rendering adds resource contention
+and must be disabled for timing measurements. A timeout is censored and stops the
+experiment with error status; it is never substituted with a completed delay.
 
 ## Prediction scoring
 

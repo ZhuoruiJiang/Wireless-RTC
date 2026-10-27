@@ -1,7 +1,6 @@
-"""Reuse upstream policies/physics; implement an explicit variable-delay scheduler.
+"""Shared upstream physics/policy adapters and the offline logical-time runner.
 
-This is an offline logical-time experiment. Host execution speed does not set
-simulated delay. Live RPC integration is separate from this runner.
+The paced live RPC runner lives in wireless_rtc.client.live.
 """
 import csv
 import hashlib
@@ -34,17 +33,45 @@ def dependencies():
     return jax, jnp, nnx, np, kenv, saving, model
 
 
-class KinetixPolicy:
-    def __init__(self, checkpoint, level="worlds/l/grasp_easy.json", seed=0):
-        self.jax, self.jnp, nnx, self.np, kenv, saving, model = dependencies()
+class KinetixSimulator:
+    """Client-side physics and rendering; no checkpoint or policy is loaded."""
+
+    def __init__(self, level="worlds/l/grasp_easy.json", seed=0):
+        sys.path.insert(0, str(UPSTREAM / "third_party" / "kinetix"))
+        import jax
+        import jax.numpy as jnp
+        import numpy as np
+        from kinetix.environment import env as kenv
+        from kinetix.util import saving
+        self.jax, self.jnp, self.np = jax, jnp, np
         jax, jnp = self.jax, self.jnp
+        self.level_name = level
+        self.level_sha256 = hashlib.sha256((UPSTREAM / level).read_bytes()).hexdigest()
         self.level, static, self.params = saving.load_from_json_file(str(UPSTREAM / level))
         self.static = static.replace(screen_dim=(512,512))
         self.env = kenv.make_kinetix_env_from_name(
             "Kinetix-Symbolic-Continuous-v1", static_env_params=self.static)
         obs, _ = self.env.reset_to_level(jax.random.key(seed), self.level, self.params)
+        self.observation_dim = obs.shape[-1]
         self.action_dim = self.env.action_space(self.params).shape[0]
-        self.policy = model.FlowPolicy(obs_dim=obs.shape[-1], action_dim=self.action_dim,
+        self.reset = jax.jit(lambda key: self.env.reset_to_level(key,self.level,self.params))
+        def step(key,state,action):
+            key1,key2 = jax.random.split(key)
+            noisy = action + jax.random.normal(key1,action.shape)*.1
+            return self.env.step_env(key2,state,noisy,self.params)
+        self.step = jax.jit(step)
+
+    def make_frame_renderer(self):
+        return _make_frame_renderer(self)
+
+
+class KinetixPolicy(KinetixSimulator):
+    def __init__(self, checkpoint, level="worlds/l/grasp_easy.json", seed=0):
+        super().__init__(level, seed)
+        _, _, nnx, _, _, _, model = dependencies()
+        jax, jnp = self.jax, self.jnp
+        self.checkpoint_sha256 = hashlib.sha256(Path(checkpoint).read_bytes()).hexdigest()
+        self.policy = model.FlowPolicy(obs_dim=self.observation_dim, action_dim=self.action_dim,
                                        config=model.ModelConfig(), rngs=nnx.Rngs(seed))
         # Checkpoints are upstream Python pickle files: load trusted local files only.
         with Path(checkpoint).open("rb") as f:
@@ -59,54 +86,80 @@ class KinetixPolicy:
         self.plain = jax.jit(lambda key,obs: policy.action(key,obs,5))
         self.guided = jax.jit(lambda key,obs,previous,d,end:
             policy.realtime_action(key,obs,5,previous,d,end,"exp",5.))
-        self.reset = jax.jit(lambda key: self.env.reset_to_level(key,self.level,self.params))
-        def step(key,state,action):
-            key1,key2 = jax.random.split(key)
-            noisy = action + jax.random.normal(key1,action.shape)*.1
-            return self.env.step_env(key2,state,noisy,self.params)
-        self.step = jax.jit(step)
 
     def next_key(self):
         self.rng,key = self.jax.random.split(self.rng)
         return key
 
-    def make_frame_renderer(self):
-        # Import/compile lazily on the viewer thread; normal runs pay no rendering cost.
-        render = None
+    def describe(self):
+        return dict(protocol_version=1, horizon=self.horizon, action_dim=self.action_dim,
+                    observation_dim=self.observation_dim, level=self.level_name,
+                    level_sha256=self.level_sha256, checkpoint_sha256=self.checkpoint_sha256,
+                    parameters=self.parameter_count, jax_version=self.jax.__version__,
+                    devices=[str(d) for d in self.jax.devices()])
 
-        def jpeg(state):
-            nonlocal render
-            import io
-            from PIL import Image
-            if render is None:
-                from kinetix.render.renderer_pixels import make_render_pixels
-                pixels = make_render_pixels(self.params, self.static.replace(downscale=2))
-                # Match upstream video orientation: x/y transpose, then vertical flip.
-                render = self.jax.jit(lambda s: pixels(s).round().clip(0,255)
-                                      .astype(self.jnp.uint8).transpose(1,0,2)[::-1])
-            frame = self.np.asarray(render(state))
-            output = io.BytesIO()
-            Image.fromarray(frame).save(output, format="JPEG", quality=80)
-            return output.getvalue()
+    def _observation(self, request):
+        obs = self.np.asarray(request["observation"], dtype=self.np.float32)
+        if obs.shape != (self.observation_dim,) or not self.np.isfinite(obs).all():
+            raise ValueError("Invalid observation shape or values")
+        return self.jnp.asarray(obs)
 
-        return jpeg
+    def initialize(self, request):
+        obs = self._observation(request)
+        seed = request["seed"]
+        if type(seed) is not int or not 0 <= seed < 2**32:
+            raise ValueError("Invalid episode seed")
+        key = self.jax.random.key(seed)
+        previous = self.jnp.zeros((1,self.horizon,self.action_dim))
+        # Compile on this observation shape before the client's episode clock starts.
+        self.guided(key,obs[None],previous,0,self.horizon).block_until_ready()
+        self.rng = key
+        chunk = self.plain(self.next_key(),obs[None])[0]
+        chunk.block_until_ready()
+        return dict(actions=self.np.asarray(chunk).tolist(), observation_tick=0)
 
     def infer(self, request):
         jnp, np = self.jnp, self.np
-        obs = jnp.asarray(request["observation"], dtype=jnp.float32)
-        previous = jnp.asarray(request["previous_actions"], dtype=jnp.float32)
-        d, end = int(request["predicted_steps"]), int(request["overlap_steps"])
-        if obs.ndim != 1 or previous.shape != (self.horizon,self.action_dim):
-            raise ValueError("Invalid observation/action shape")
-        if not 0 <= d <= end <= self.horizon:
-            raise ValueError("Require 0 <= predicted_steps <= overlap_steps <= H")
+        obs = self._observation(request)
+        previous = np.asarray(request["previous_actions"], dtype=np.float32)
+        d, end = request["predicted_steps"], request["overlap_steps"]
+        tick = request["observation_tick"]
+        method = request.get("method", "rtc")
+        if (previous.shape != (self.horizon,self.action_dim) or not np.isfinite(previous).all()
+                or type(d) is not int or type(end) is not int or type(tick) is not int or tick < 0):
+            raise ValueError("Invalid action shape, values, or scheduling fields")
+        if not 0 <= d <= end <= self.horizon or method not in {"rtc", "naive"}:
+            raise ValueError("Invalid method or prefix/overlap bounds")
         start = time.perf_counter()
-        chunk = self.guided(self.next_key(),obs[None],previous[None],d,end)[0]
+        if method == "rtc":
+            chunk = self.guided(self.next_key(),obs[None],jnp.asarray(previous)[None],d,end)[0]
+        else:
+            chunk = self.plain(self.next_key(),obs[None])[0]
         chunk.block_until_ready()
-        return dict(actions=np.asarray(chunk).tolist(),
-                    observation_tick=request["observation_tick"],
+        return dict(actions=np.asarray(chunk).tolist(), observation_tick=tick,
                     inference_ms=(time.perf_counter()-start)*1000)
 
+
+def _make_frame_renderer(self):
+    # Import/compile lazily on the viewer thread; normal runs pay no rendering cost.
+    render = None
+
+    def jpeg(state):
+        nonlocal render
+        import io
+        from PIL import Image
+        if render is None:
+            from kinetix.render.renderer_pixels import make_render_pixels
+            pixels = make_render_pixels(self.params, self.static.replace(downscale=2))
+            # Match upstream video orientation: x/y transpose, then vertical flip.
+            render = self.jax.jit(lambda s: pixels(s).round().clip(0,255)
+                                  .astype(self.jnp.uint8).transpose(1,0,2)[::-1])
+        frame = self.np.asarray(render(state))
+        output = io.BytesIO()
+        Image.fromarray(frame).save(output, format="JPEG", quality=80)
+        return output.getvalue()
+
+    return jpeg
 
 def run_experiment(config, checkpoint, output, metadata, viewer=None, view_pace=False):
     if config["episodes"] < 1 or config["min_execution_steps"] < 1:

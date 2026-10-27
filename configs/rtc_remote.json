@@ -1,0 +1,12 @@
+{
+  "seed": 42,
+  "episodes": 5,
+  "level": "worlds/l/grasp_easy.json",
+  "control_ms": 20,
+  "min_execution_steps": 4,
+  "methods": ["rtc", "naive"],
+  "predictors": {
+    "recent_max": {"kind": "max", "window": 32, "initial_ms": 60},
+    "rolling_p95": {"kind": "quantile", "window": 32, "quantile_level": 0.95, "initial_ms": 60}
+  }
+}

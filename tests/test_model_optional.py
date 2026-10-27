@@ -6,12 +6,48 @@ import http.client
 import json
 from pathlib import Path
 import tempfile
+import threading
 import unittest
 from unittest.mock import patch
 
 
 @unittest.skipUnless(os.environ.get("RTC_CHECKPOINT"),"Set RTC_CHECKPOINT after installing RTC dependencies")
 class PretrainedTests(unittest.TestCase):
+    def test_live_rpc_with_independent_client_simulator(self):
+        from wireless_rtc.client.live import run_remote
+        from wireless_rtc.server.service import make_server
+        from wireless_rtc.simulation.kinetix import KinetixPolicy, KinetixSimulator
+        from wireless_rtc.simulation.viewer import SimulationViewer
+        policy = KinetixPolicy(os.environ["RTC_CHECKPOINT"])
+        simulator = KinetixSimulator()
+        self.assertFalse(hasattr(simulator,"policy"))
+        simulator.params = simulator.params.replace(max_timesteps=8)
+        config = json.loads(Path("configs/rtc_remote.json").read_text())
+        config.update(episodes=1,methods=["rtc","naive"],
+                      predictors={"recent_max": config["predictors"]["recent_max"]})
+        server = make_server("127.0.0.1",0,policy)
+        thread = threading.Thread(target=server.serve_forever,daemon=True)
+        thread.start()
+        try:
+            with tempfile.TemporaryDirectory() as temp, SimulationViewer(port=0) as viewer, patch(
+                    "wireless_rtc.simulation.kinetix.KinetixSimulator",return_value=simulator):
+                root = Path(temp)/"live"
+                run_remote(config,"127.0.0.1",server.server_address[1],root,{},viewer=viewer)
+                manifest = json.loads((root/"manifest.json").read_text())
+                self.assertEqual(manifest["status"],"completed")
+                self.assertEqual(manifest["server"]["checkpoint_sha256"],policy.checkpoint_sha256)
+                self.assertTrue(viewer.status()["phase"].startswith("Completed"))
+                for method in config["methods"]:
+                    directory = root/f"{method}-recent_max"
+                    with (directory/"requests.csv").open() as f:
+                        rows = list(csv.DictReader(f))
+                    self.assertTrue(rows)
+                    self.assertTrue(all(r["status"] == "ok" and float(r["actual_ms"]) > 0 for r in rows))
+                    with (directory/"ticks.csv").open() as f:
+                        self.assertEqual(len(list(csv.DictReader(f))),8)
+        finally:
+            server.shutdown(); server.server_close(); thread.join(timeout=5)
+
     def test_actual_checkpoint_generates_finite_chunks(self):
         from wireless_rtc.simulation.kinetix import KinetixPolicy
         p=KinetixPolicy(os.environ["RTC_CHECKPOINT"])

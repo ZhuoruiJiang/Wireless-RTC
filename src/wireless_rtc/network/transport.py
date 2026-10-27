@@ -24,8 +24,15 @@ class RPCClient:
         return response, elapsed_ms
 
     def close(self):
-        self.stream.close()
-        self.socket.close()
+        # Wake a background reader first; file.close alone may wait on its lock.
+        try:
+            self.socket.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
+        try:
+            self.stream.close()
+        finally:
+            self.socket.close()
 
     def __enter__(self):
         return self

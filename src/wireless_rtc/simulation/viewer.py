@@ -29,7 +29,10 @@ async function refresh(){
   if(s.method)lines.push('Method: '+s.method+' | Predictor: '+s.predictor);
   if(s.episode!==undefined)lines.push('Episode: '+s.episode+' / '+s.episodes+' | Tick: '+s.tick);
   if(s.simulation_ms!==undefined)lines.push('Simulation time: '+(s.simulation_ms/1000).toFixed(2)+' s | Success: '+s.success);
-  if(s.predicted_ms!==undefined)lines.push('Predicted delay: '+s.predicted_ms.toFixed(2)+' ms | Injected delay: '+s.actual_ms.toFixed(2)+' ms');
+  if(s.predicted_ms!==undefined){
+   const actual=s.actual_ms==null?'awaiting response':s.actual_ms.toFixed(2)+' ms';
+   lines.push('Predicted delay: '+s.predicted_ms.toFixed(2)+' ms | '+(s.delay_kind==='measured'?'Measured RTT: ':'Injected delay: ')+actual);
+  }
   if(s.viewer_error)lines.push('Rendering error: '+s.viewer_error);
   if(s.error)lines.push(s.error);
   document.querySelector('#status').textContent=lines.join('\n');

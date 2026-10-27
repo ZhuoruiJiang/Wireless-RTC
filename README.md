@@ -5,9 +5,9 @@ The laptop owns observations, delay prediction, and execution; a server can serv
 pretrained policy. This first milestone provides a runnable prediction study,
 network probes, and **offline pretrained Kinetix RTC with fixed/random delays**.
 
-**Status:** live network probes and a policy RPC endpoint are implemented.
-The Kinetix experiment runner currently uses logical-time delay injection on one
-machine; a paced live simulator-to-server controller is the next milestone.
+**Status:** live probes, a policy RPC endpoint, and a paced simulator-to-server
+controller are implemented. `rtc` runs offline with injected logical-time delays;
+`rtc-live` runs local physics with remote policy inference and measured RPC delays.
 Synthetic prediction results must not be described as campus WiFi or robot success results.
 
 ## Structure
@@ -17,7 +17,7 @@ Synthetic prediction results must not be described as campus WiFi or robot succe
 | `src/wireless_rtc/network/` | Delay sources, persistent TCP client, network probes |
 | `src/wireless_rtc/protocol/` | Bounded JSON request/response messages |
 | `src/wireless_rtc/server/` | Probe service and optional policy endpoint |
-| `src/wireless_rtc/client/` | Delay conversion and action alignment |
+| `src/wireless_rtc/client/` | Delay conversion, action alignment, paced asynchronous live controller |
 | `src/wireless_rtc/prediction/` | Recent maximum, rolling quantile, last-value predictors |
 | `src/wireless_rtc/simulation/` | Pretrained upstream RTC/Kinetix adapter |
 | `src/wireless_rtc/analysis/` | Causal scoring, CSV/JSON summaries, SVG plots |
@@ -187,6 +187,82 @@ uv run --no-sync python -m wireless_rtc serve --checkpoint checkpoints/24/polici
 Requests carry observation, aligned previous actions, predicted prefix steps,
 overlap steps, and observation tick. Responses echo tick/ID and inference timing.
 Only load trusted pickle checkpoints. Checkpoints and large logs are gitignored.
+
+## Live client simulation with server policy inference
+
+The **laptop** owns Kinetix physics, delay prediction, action buffering, and the
+browser viewer. The **server** owns the pretrained policy and checkpoint.
+Only observations/action chunks cross the network; video frames stay on the laptop.
+The client needs the CPU Kinetix dependencies and pinned submodules from the setup
+above, including `jaxued`, but does **not** need a checkpoint. Use the same repository
+revision and level on both machines. Preserve the CUDA-enabled environment on the
+server; do not reinstall the CPU requirements there.
+
+1. On **Cybertron**, from the updated repository, start the policy server:
+
+   ```sh
+   JAX_PLATFORMS=cuda uv run --no-sync python -m wireless_rtc serve --host 127.0.0.1 --port 8765 --checkpoint checkpoints/24/policies/worlds_l_grasp_easy.pkl
+   ```
+
+   Wait for `Listening on 127.0.0.1:8765`. CUDA must already be configured. The
+   policy is warmed up when the client initializes its first episode.
+
+2. On the **laptop**, keep this SSH tunnel open in its own terminal:
+
+   ```sh
+   ssh -N -o ExitOnForwardFailure=yes -L 8765:127.0.0.1:8765 zhuorui@cybertron5.csres.utexas.edu
+   ```
+
+3. In another **laptop PowerShell** terminal, run local CPU simulation and viewing:
+
+   ```powershell
+   $env:JAX_PLATFORMS = "cpu"
+   uv run --no-sync python -m wireless_rtc rtc-live --config configs/rtc_remote.json --host 127.0.0.1 --port 8765 --output runs/rtc-live-001 --view
+   ```
+
+   Open <http://localhost:8080>. There is **no viewer-port SSH tunnel**. After the
+   run completes, the local viewer keeps its final frame until Ctrl+C. Use a fresh
+   output directory for each run. `--view-port` and `--view-fps` work as in `rtc`.
+   Omit `--view` for timing measurements.
+
+`rtc-live` is always paced; it has no `--view-pace` flag. The new remote config
+starts with five episodes per condition, RTC/naive methods, and recent-max/p95
+predictors. It deliberately has no `delay` section. Your offline fixed/random
+configs retain their injected delays and are rejected by the live command.
+
+Before each episode the client warms its physics code, the server warms inference
+and resets the policy RNG, and an initial plain-policy action chunk is fetched.
+This setup is outside the episode clock and predictor history. Thereafter, one
+background worker sends policy requests while the main thread keeps executing
+physics at the configured control interval. A response is considered only at a
+controller boundary. The client drops the elapsed prefix, rejects expired chunks,
+and executes zero actions when the buffer is exhausted. Physics is never paused
+to wait for a running policy request. The final pending request is drained after
+an episode ends so its result cannot leak into the next episode.
+
+Each condition writes `requests.csv`, `ticks.csv`, `episodes.csv`, and `summary.json`.
+The manifest includes the server checkpoint hash/devices, client devices, resolved
+config, viewer settings, and run status. `requests.csv` records measured RTT
+(`actual_ms`), predictions, server/inference timing, response IDs/ticks, actual
+activation age (`elapsed_ticks`), discarded responses, and failures. RTT includes
+worker dispatch, serialization, transport, inference, decoding, and validation;
+it excludes initial connection establishment and episode warmup. The predictor
+updates only after a successful response is observed during the episode, including
+expired chunks, and resets each episode. Failed/censored delays never update it.
+
+`ideal_delay_steps` is `ceil(RTT/control_ms)`. Actual chunk alignment uses simulation
+ticks, which may differ when local physics/rendering is slow. `ticks.csv` records
+buffer exhaustion, physics execution time, and controller-work budget overruns.
+The controller does not run bursts of catch-up steps. Disable viewing and inspect
+overruns before interpreting a run as meeting its nominal control rate. Live
+conditions encounter different real network delays; they do not share the same
+exogenous trace as offline conditions.
+
+The default `--timeout 120` seconds allows first-time compilation. A timeout or
+invalid response stops the run, preserves completed logs, and marks the manifest
+as failed; it is not silently treated as a valid RTT or a successful episode.
+Ctrl+C marks a run interrupted. Results from an incomplete run are not a completed
+experiment. This controller is intended for the simulator, not robot hardware.
 
 See [the experiment contract](docs/experiment.md) for timing, metrics, and later tuning.
 Upstream reference: https://github.com/Physical-Intelligence/real-time-chunking-kinetix

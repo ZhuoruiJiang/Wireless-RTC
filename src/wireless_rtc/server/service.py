@@ -10,7 +10,7 @@ def make_server(host="127.0.0.1", port=8765, policy=None):
             while True:
                 try:
                     request = receive_message(self.rfile)
-                except (EOFError, OSError):
+                except (EOFError, OSError, ValueError):
                     return
                 start = time.perf_counter()
                 try:
@@ -23,6 +23,10 @@ def make_server(host="127.0.0.1", port=8765, policy=None):
                         result = {"payload": request.get("payload", "")}
                     elif operation == "infer" and policy is not None:
                         result = policy.infer(request)
+                    elif operation == "describe" and policy is not None:
+                        result = policy.describe()
+                    elif operation == "initialize" and policy is not None:
+                        result = policy.initialize(request)
                     else:
                         raise ValueError("Unsupported operation or no policy loaded")
                     response = dict(request_id=request["request_id"], status="ok",
