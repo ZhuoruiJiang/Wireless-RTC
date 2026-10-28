@@ -3,7 +3,7 @@ import math
 
 
 CONTROL_MODES = {"naive":"none", "rtc":"inference_ms", "wireless_rtc":"response_rtt_ms"}
-PROTOCOL_VERSION = 2
+PROTOCOL_VERSION = 3
 
 
 def inference_time(value):

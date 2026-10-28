@@ -130,6 +130,20 @@ class ViewerTests(unittest.TestCase):
         self.assertFalse(viewer._http_thread.is_alive())
         self.assertFalse(viewer._render_thread.is_alive())
 
+    def test_task_renderer_reset_discards_old_scene(self):
+        with SimulationViewer(port=0,fps=60) as viewer:
+            viewer.set_renderer(lambda state:JPEG)
+            viewer.update(0,task="grasp_easy")
+            eventually(lambda:viewer.status()["frame_ready"])
+            first = viewer.snapshot()["frame"]["sequence"]
+            viewer.set_renderer(lambda state:JPEG,reset=True)
+            viewer.update(task="cartpole_thrust")
+            self.assertIsNone(viewer.snapshot()["frame"])
+            viewer.update(1)
+            eventually(lambda:viewer.status()["frame_ready"])
+            self.assertGreater(viewer.snapshot()["frame"]["sequence"],first)
+            self.assertEqual(viewer.snapshot()["frame"]["state"]["task"],"cartpole_thrust")
+
     def test_invalid_and_occupied_ports_fail_before_policy_load(self):
         for options in [["--view-pace"],["--view-fps","nan"],["--view-port","0"]]:
             with self.subTest(options=options),patch("sys.stderr"),self.assertRaises(SystemExit) as result:

@@ -1,7 +1,7 @@
 {
   "seed": 42,
   "episodes": 5,
-  "level": "worlds/l/grasp_easy.json",
+  "tasks": ["grasp_easy", "cartpole_thrust", "catcher_v3", "hard_lunar_lander", "mjc_walker"],
   "control_ms": 20,
   "min_execution_steps": 4,
   "methods": ["naive", "rtc", "wireless_rtc"],

@@ -23,7 +23,7 @@ Synthetic prediction results must not be described as campus WiFi or robot succe
 | `src/wireless_rtc/analysis/` | Causal scoring, CSV/JSON summaries, SVG plots |
 | `configs/` | First-run experiment settings |
 | `tests/` | Leakage, timing, protocol, optional pretrained checks |
-| `scripts/` | Download one checkpoint |
+| `scripts/` | Download selected task checkpoints |
 | `vendor/rtc-kinetix/` | Unmodified pinned upstream submodule |
 | `results/` | Small checked-in example results; use `runs/` for new runs |
 
@@ -307,24 +307,64 @@ conditions: `naive/`, two `rtc-PREDICTOR/`, and two `wireless_rtc-PREDICTOR/`.
 **Label migration:** older results named `rtc` used total RTT, corresponding to
 the new `wireless_rtc`. Historical results are not rewritten. New manifests
 record the mapping explicitly. Update **both machines** and restart the policy
-server: protocol v2 checks prevent silently using the old label meanings.
+server: protocol v3 checks enforce both the control labels and task selection.
+
+### Select tasks and read the combined report
+
+Edit `configs/rtc_remote.json` to choose any nonempty subset of these tasks, in
+the order you want to run them:
+
+```json
+"tasks": ["grasp_easy", "cartpole_thrust", "catcher_v3", "hard_lunar_lander", "mjc_walker"]
+```
+
+Every task runs all configured methods, predictors, and episode seeds. With the
+default five conditions and five episodes, selecting all five tasks runs 125
+episodes. The viewer shows the current task and clears the previous scene when
+switching. Each task uses its own pretrained checkpoint; no retraining is needed.
+The server checks checkpoint availability before any episodes start. Download
+newly selected checkpoints on the server before running the client.
+
+At the run root, `summary.csv` gives one row per method/predictor, with a solve-rate
+column for every selected task and `average_solve_rate`. The average is the
+**arithmetic mean of the selected tasks' solve rates**, giving each task equal
+weight. For example, task solve rates 0.8 and 0.4 give an average of 0.6.
+`task_summary.csv` contains one row per task/method/predictor. `summary.json`
+(schema version 2) contains `selected_tasks`, `per_task`, and `overall`, including
+the same averages and task scores. `tasks/TASK/summary.json` reports that task's
+conditions; detailed logs are in `tasks/TASK/CONDITION/`.
+
+Combined summaries are written only after every selected task finishes. Interrupted
+or failed runs retain their logs and manifest status without publishing a partial
+cross-task average. The manifest records each task's level hash, checkpoint hash,
+devices, and completion status. Older remote configs with only `level` still select
+that single task; `tasks` takes precedence when present. The offline `rtc` command
+continues to use one `level` and one `--checkpoint`.
+
+To exercise all five actual policies in a short CPU smoke test, download the
+checkpoints as shown below, set `RTC_TASK_CHECKPOINT_DIR=checkpoints/24/policies`,
+then run the unit-test command. This optional test caps each episode at eight
+steps; its scores are functional checks, not benchmark results.
 
 The **laptop** owns Kinetix physics, delay prediction, action buffering, and the
 browser viewer. The **server** owns the pretrained policy and checkpoint.
 Only observations/action chunks cross the network; video frames stay on the laptop.
 Use [the laptop setup](#set-up-a-laptop-for-live-simulation) above to prepare the
 client's standard `.venv`; the client does **not** need a checkpoint. Use the same repository
-revision and level on both machines. Preserve the CUDA-enabled environment on the
+revision on both machines. The client selects matching levels and policies automatically.
+Preserve the CUDA-enabled environment on the
 server; do not reinstall the CPU requirements there.
 
-1. On **Cybertron**, from the updated repository, start the policy server:
+1. On **Cybertron**, download the selected checkpoints and start the policy server:
 
    ```sh
-   JAX_PLATFORMS=cuda uv run --no-sync python -m wireless_rtc serve --host 127.0.0.1 --port 8765 --checkpoint checkpoints/24/policies/worlds_l_grasp_easy.pkl
+   uv run --no-sync python scripts/download_checkpoint.py --config configs/rtc_remote.json --skip-existing
+   JAX_PLATFORMS=cuda uv run --no-sync python -m wireless_rtc serve --host 127.0.0.1 --port 8765 --checkpoint-dir checkpoints/24/policies
    ```
 
    Wait for `Listening on 127.0.0.1:8765`. CUDA must already be configured. The
-   policy is warmed up when the client initializes its first episode.
+   matching policy loads on first selection and warms when the client initializes
+   its first episode. Loaded policies are cached for subsequent selections.
 
 2. On the **laptop**, keep this SSH tunnel open in its own terminal:
 
@@ -346,7 +386,7 @@ server; do not reinstall the CPU requirements there.
 
 `rtc-live` is always paced; it has no `--view-pace` flag. The new remote config
 starts with five episodes per condition, all three modes, and recent-max/p95
-predictors. It deliberately has no `delay` section. Your offline fixed/random
+predictors, for each selected task. It deliberately has no `delay` section. Your offline fixed/random
 configs retain their injected delays and are rejected by the live command.
 
 Before each episode the client warms its physics code, the server warms inference
@@ -361,7 +401,8 @@ and executes zero actions when the buffer is exhausted. Physics is never paused
 to wait for a running policy request. The final pending request is drained after
 an episode ends so its result cannot leak into the next episode.
 
-Each condition writes `requests.csv`, `ticks.csv`, `episodes.csv`, and `summary.json`.
+Each condition under `tasks/TASK/CONDITION/` writes `requests.csv`, `ticks.csv`,
+`episodes.csv`, and `summary.json`.
 The manifest includes the server checkpoint hash/devices, client devices, resolved
 config, viewer settings, and run status. `requests.csv` records measured RTT
 (`actual_ms`), predictions, server/inference timing, response IDs/ticks, actual
@@ -394,7 +435,7 @@ experiment. This controller is intended for the simulator, not robot hardware.
 Restart the policy server with the optional delay mode enabled:
 
 ```sh
-JAX_PLATFORMS=cuda uv run --no-sync python -m wireless_rtc serve --checkpoint checkpoints/24/policies/worlds_l_grasp_easy.pkl --delay normal --delay-mean-ms 150 --delay-std-ms 50 --delay-max-ms 1000 --delay-seed 42
+JAX_PLATFORMS=cuda uv run --no-sync python -m wireless_rtc serve --checkpoint-dir checkpoints/24/policies --delay normal --delay-mean-ms 150 --delay-std-ms 50 --delay-max-ms 1000 --delay-seed 42
 ```
 
 The client command and remote config stay the same. Omitting `--delay normal`

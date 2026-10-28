@@ -6,7 +6,7 @@ from wireless_rtc.protocol.messages import receive_message, send_message
 def make_server(host="127.0.0.1", port=8765, policy=None, response_delay=None):
     class Handler(socketserver.StreamRequestHandler):
         def handle(self):
-            self.connection.settimeout(60)
+            self.connection.settimeout(300)
             while True:
                 try:
                     request = receive_message(self.rfile)
@@ -31,6 +31,15 @@ def make_server(host="127.0.0.1", port=8765, policy=None, response_delay=None):
                                       delay_sleep_ms=(time.perf_counter()-wait_started)*1000 if injected_ms else 0.)
                     elif operation == "describe" and policy is not None:
                         result = policy.describe()
+                        result["response_delay"] = response_delay.describe() if response_delay is not None else {"kind":"none"}
+                    elif operation == "select_task" and policy is not None:
+                        task = request["task"]
+                        if hasattr(policy,"select_task"):
+                            result = policy.select_task(task)
+                        else:
+                            result = policy.describe()
+                            if result.get("task") != task:
+                                raise ValueError("Single-policy server cannot select this task; start with --checkpoint-dir")
                         result["response_delay"] = response_delay.describe() if response_delay is not None else {"kind":"none"}
                     elif operation == "initialize" and policy is not None:
                         result = policy.initialize(request)

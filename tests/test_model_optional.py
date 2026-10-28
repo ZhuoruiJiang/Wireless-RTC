@@ -25,7 +25,7 @@ class PretrainedTests(unittest.TestCase):
         self.assertFalse(hasattr(simulator,"policy"))
         simulator.params = simulator.params.replace(max_timesteps=8)
         config = json.loads(Path("configs/rtc_remote.json").read_text())
-        config.update(episodes=1,methods=["naive","rtc","wireless_rtc"],
+        config.update(tasks=["grasp_easy"],episodes=1,methods=["naive","rtc","wireless_rtc"],
                       predictors={"recent_max": config["predictors"]["recent_max"]})
         server = make_server("127.0.0.1",0,policy,
                              response_delay=NormalResponseDelay(mean_ms=25,std_ms=5,max_ms=100))
@@ -42,7 +42,7 @@ class PretrainedTests(unittest.TestCase):
                 self.assertEqual(manifest["server"]["response_delay"]["kind"],"clipped_normal")
                 self.assertTrue(viewer.status()["phase"].startswith("Completed"))
                 for method in config["methods"]:
-                    directory = root/("naive" if method == "naive" else f"{method}-recent_max")
+                    directory = root/"tasks"/"grasp_easy"/("naive" if method == "naive" else f"{method}-recent_max")
                     with (directory/"requests.csv").open() as f:
                         rows = list(csv.DictReader(f))
                     self.assertTrue(rows)
@@ -114,6 +114,49 @@ class PretrainedTests(unittest.TestCase):
                 self.assertEqual(*conditions)
             manifest = json.loads((root/"view"/"manifest.json").read_text())
             self.assertTrue(manifest["viewer"]["enabled"])
+
+
+@unittest.skipUnless(os.environ.get("RTC_TASK_CHECKPOINT_DIR"),"Set RTC_TASK_CHECKPOINT_DIR for the five-task model smoke test")
+class MultiTaskPretrainedTests(unittest.TestCase):
+    def test_all_five_checkpoints_switch_and_report(self):
+        from wireless_rtc.client.live import run_remote
+        from wireless_rtc.server.policies import PolicyRegistry
+        from wireless_rtc.server.service import make_server
+        from wireless_rtc.simulation.kinetix import KinetixSimulator
+        from wireless_rtc.simulation.viewer import SimulationViewer
+        from wireless_rtc.tasks import TASKS
+        registry = PolicyRegistry(os.environ["RTC_TASK_CHECKPOINT_DIR"])
+        server = make_server("127.0.0.1",0,registry)
+        thread = threading.Thread(target=server.serve_forever,daemon=True)
+        thread.start()
+        config = json.loads(Path("configs/rtc_remote.json").read_text())
+        config.update(tasks=list(TASKS),episodes=1,predictors={"last":{"kind":"last","initial_ms":20}})
+        real_simulator = KinetixSimulator
+        def short_simulator(level,seed):
+            sim = real_simulator(level,seed)
+            sim.params = sim.params.replace(max_timesteps=8)
+            return sim
+        try:
+            with tempfile.TemporaryDirectory() as temp,SimulationViewer(port=0) as viewer,patch(
+                    "wireless_rtc.simulation.kinetix.KinetixSimulator",side_effect=short_simulator):
+                output = Path(temp)/"suite"
+                run_remote(config,"127.0.0.1",server.server_address[1],output,{},viewer=viewer)
+                summary = json.loads((output/"summary.json").read_text())
+                self.assertEqual(len(summary["per_task"]),15)
+                self.assertEqual(len(summary["overall"]),3)
+                self.assertEqual(set(registry._policies),set(TASKS))
+                for row in summary["overall"]:
+                    self.assertEqual(set(row["task_solve_rates"]),set(TASKS))
+                    self.assertEqual(row["average_solve_rate"],sum(row["task_solve_rates"].values())/5)
+                manifest = json.loads((output/"manifest.json").read_text())
+                self.assertEqual(manifest["status"],"completed")
+                self.assertTrue(all(value["status"] == "completed" for value in manifest["tasks"].values()))
+                deadline = time.monotonic()+30
+                while not viewer.status()["frame_ready"] and time.monotonic() < deadline:
+                    time.sleep(.02)
+                self.assertEqual(viewer.snapshot()["frame"]["state"]["task"],list(TASKS)[-1])
+        finally:
+            server.shutdown(); server.server_close(); thread.join(timeout=5)
 
 
 if __name__=="__main__":

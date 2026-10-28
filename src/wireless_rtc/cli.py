@@ -35,7 +35,9 @@ def main(argv=None):
     server = commands.add_parser("serve", help="Probe service; optional pretrained policy backend")
     server.add_argument("--host", default="127.0.0.1")
     server.add_argument("--port", type=int, default=8765)
-    server.add_argument("--checkpoint")
+    checkpoints = server.add_mutually_exclusive_group()
+    checkpoints.add_argument("--checkpoint",help="One fixed policy checkpoint")
+    checkpoints.add_argument("--checkpoint-dir",help="Policy directory for automatic task switching")
     server.add_argument("--level", default="worlds/l/grasp_easy.json")
     server.add_argument("--delay", choices=["none","normal"], default="none", help="Optional extra policy response wait")
     server.add_argument("--delay-mean-ms", type=float, default=150)
@@ -100,8 +102,14 @@ def main(argv=None):
         if args.checkpoint:
             from wireless_rtc.simulation.kinetix import KinetixPolicy
             policy = KinetixPolicy(args.checkpoint, args.level)
+        elif args.checkpoint_dir:
+            from wireless_rtc.server.policies import PolicyRegistry
+            try:
+                policy = PolicyRegistry(args.checkpoint_dir)
+            except ValueError as exc:
+                parser.error(str(exc))
         if response_delay is not None and policy is None:
-            parser.error("--delay normal requires --checkpoint; probe waits use the probe command's --delay")
+            parser.error("--delay normal requires --checkpoint or --checkpoint-dir")
         serve(args.host, args.port, policy, response_delay)
     elif args.command == "probe":
         print(f"Run output: {Path(args.output).resolve()}",flush=True)

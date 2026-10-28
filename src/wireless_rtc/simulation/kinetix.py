@@ -94,13 +94,17 @@ class KinetixPolicy(KinetixSimulator):
         return key
 
     def describe(self):
-        return dict(protocol_version=PROTOCOL_VERSION, control_modes=CONTROL_MODES.copy(), horizon=self.horizon, action_dim=self.action_dim,
+        task = Path(self.level_name).stem
+        return dict(protocol_version=PROTOCOL_VERSION, control_modes=CONTROL_MODES.copy(),
+                    task=task,available_tasks=[task],horizon=self.horizon, action_dim=self.action_dim,
                     observation_dim=self.observation_dim, level=self.level_name,
                     level_sha256=self.level_sha256, checkpoint_sha256=self.checkpoint_sha256,
                     parameters=self.parameter_count, jax_version=self.jax.__version__,
                     devices=[str(d) for d in self.jax.devices()])
 
     def _observation(self, request):
+        if "task" in request and request["task"] != Path(self.level_name).stem:
+            raise ValueError("Request task does not match policy level")
         obs = self.np.asarray(request["observation"], dtype=self.np.float32)
         if obs.shape != (self.observation_dim,) or not self.np.isfinite(obs).all():
             raise ValueError("Invalid observation shape or values")
@@ -118,7 +122,7 @@ class KinetixPolicy(KinetixSimulator):
         chunk = self.plain(self.next_key(),obs[None])[0]
         chunk.block_until_ready()
         return dict(actions=self.np.asarray(chunk).tolist(), observation_tick=0,
-                    calibration_inference_ms=calibration_ms)
+                    calibration_inference_ms=calibration_ms,task=Path(self.level_name).stem)
 
     def calibrate(self, obs):
         """A causal warmed guided-inference measurement, before episode execution."""
@@ -148,7 +152,7 @@ class KinetixPolicy(KinetixSimulator):
             chunk = self.plain(self.next_key(),obs[None])[0]
         chunk.block_until_ready()
         return dict(actions=np.asarray(chunk).tolist(), observation_tick=tick,
-                    inference_ms=(time.perf_counter()-start)*1000)
+                    inference_ms=(time.perf_counter()-start)*1000,task=Path(self.level_name).stem)
 
 
 def run_experiment(config, checkpoint, output, metadata, viewer=None, view_pace=False):

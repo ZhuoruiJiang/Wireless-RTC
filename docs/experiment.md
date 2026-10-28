@@ -73,6 +73,21 @@ experiment with error status; it is never substituted with a completed delay.
 
 ## Prediction scoring
 
+The live config's `tasks` list selects `grasp_easy`, `cartpole_thrust`,
+`catcher_v3`, `hard_lunar_lander`, and/or `mjc_walker`. Each selected task runs
+every configured condition with the same episode seed schedule and its matching
+pretrained policy. Histories reset per episode; task-specific actions and responses
+are checked against the selected policy. Select tasks and delay settings before
+the comparison rather than choosing them based on which produces the largest gap.
+
+Report each task's solve rate, along with the equal-weight arithmetic mean of
+task solve rates for each method/predictor. The root `summary.csv` exposes these
+side by side, while `task_summary.csv` and `summary.json` retain the detailed
+counts. A complete cross-task average requires every selected task to finish.
+Five episodes per condition remain a smoke test; use more paired seeds and report
+uncertainty for comparisons. Harder tasks may reduce all methods' solve rates
+without increasing the relative benefit of accounting for network delay.
+
 Predict first, then observe the completed request. Initial estimates are explicit.
 Exclude 32 warmup samples from summary metrics but retain them in raw logs.
 Report MAE, signed bias, continuous and tick-level exceedance rates, mean predicted

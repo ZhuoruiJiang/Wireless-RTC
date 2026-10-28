@@ -4,7 +4,7 @@
   const canvas = element("scene");
   const context = canvas.getContext("2d");
   let session = "", sequence = 0, paused = false, timer, inFlight = false, failures = 0;
-  let lastPaint = 0, fps = 10, generation = 0;
+  let lastPaint = 0, fps = 10, generation = 0, displayedTask;
   const text = (id, value) => { element(id).textContent = value; };
   const number = value => typeof value === "number" && Number.isFinite(value);
   const milliseconds = value => number(value) ? `${value.toFixed(1)} ms` : "—";
@@ -19,6 +19,14 @@
   }
   function progress(snapshot) {
     const state = snapshot.state;
+    if (lastPaint && state.task !== displayedTask) {
+      lastPaint = 0;
+      canvas.classList.remove("ready");
+      element("placeholder").hidden = false;
+      text("frame-info", "Loading next task");
+    }
+    element("task-row").hidden = !state.task;
+    text("task",state.task ? `${state.task} (${state.task_index || 1}/${state.total_tasks || 1})` : "—");
     fps = Math.max(1, Math.min(60, snapshot.fps || 10));
     text("phase", state.phase || "Waiting for simulation");
     text("method", state.method || "—");
@@ -68,8 +76,9 @@
       element("placeholder").hidden = true;
       sequence = frame.sequence;
       lastPaint = performance.now();
+      displayedTask = frame.state.task;
       const tick = frame.state.tick == null ? "" : ` · tick ${frame.state.tick}`;
-      text("frame-info", `Frame ${sequence}${tick}`);
+      text("frame-info", `${displayedTask ? displayedTask + " · " : ""}Frame ${sequence}${tick}`);
     } finally {
       bitmap.close();
     }
@@ -95,7 +104,7 @@
         session = snapshot.session;
         sequence = 0;
       }
-      if (snapshot.frame && !paused) await paint(snapshot.frame, requestGeneration);
+      if (snapshot.frame && !paused && snapshot.frame.state.task === snapshot.state.task) await paint(snapshot.frame, requestGeneration);
       failures = 0;
       progress(snapshot);
     } catch (error) {

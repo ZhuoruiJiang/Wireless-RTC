@@ -106,8 +106,11 @@ class SimulationViewer:
     def port(self):
         return self._server.server_address[1]
 
-    def set_renderer(self, renderer):
+    def set_renderer(self, renderer, reset=False):
         with self._condition:
+            if reset:
+                self._state = None
+                self._frame = None
             self._renderer = renderer
             self._generation += 1
             self._version += 1
