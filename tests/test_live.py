@@ -5,6 +5,7 @@ from pathlib import Path
 import threading
 import time
 import unittest
+from unittest.mock import patch
 
 from wireless_rtc.client.live import ActionBuffer, run_live_episode, validate_actions, validate_config
 from wireless_rtc.network.transport import RPCClient
@@ -38,6 +39,13 @@ def connection(policy, timeout=1):
 
 
 class LiveTests(unittest.TestCase):
+    def test_rtt_uses_high_resolution_clock(self):
+        with connection(FakePolicy(delay=.003)) as client, patch("time.monotonic",return_value=1000.):
+            result,_ = self.run_episode(client,control_ms=5)
+        self.assertEqual(result["status"],"ok")
+        self.assertTrue(self.requests)
+        self.assertTrue(all(r["actual_ms"] >= 2 for r in self.requests))
+
     def run_episode(self, client, horizon=8, max_steps=8, control_ms=10):
         self.actions, self.requests, self.ticks = [], [], []
         predictor = RollingPredictor(initial_ms=5)

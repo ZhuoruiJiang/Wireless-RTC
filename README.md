@@ -343,5 +343,46 @@ as failed; it is not silently treated as a valid RTT or a successful episode.
 Ctrl+C marks a run interrupted. Results from an incomplete run are not a completed
 experiment. This controller is intended for the simulator, not robot hardware.
 
+### Inject normal response delays on the policy server
+
+Restart the policy server with the optional delay mode enabled:
+
+```sh
+JAX_PLATFORMS=cuda uv run --no-sync python -m wireless_rtc serve --checkpoint checkpoints/24/policies/worlds_l_grasp_easy.pkl --delay normal --delay-mean-ms 150 --delay-std-ms 50 --delay-max-ms 1000 --delay-seed 42
+```
+
+The client command and remote config stay the same. Omitting `--delay normal`
+keeps the server's baseline behavior with **no injection**. With normal mode on,
+defaults are mean 150 ms, standard deviation 50 ms, maximum 1000 ms, and seed 42.
+The applied extra wait is `min(max_ms, max(0, N(mean_ms, std_ms**2)))`. Clipping
+creates probability mass at the endpoints, so this is not an unbounded normal.
+
+The server waits **once after each successful policy inference**, before sending
+its response. Network and inference latency are additional to that wait. Probe,
+description, and episode-initialization requests are not delayed. A separate RNG
+resets from the delay seed and episode seed; equal episode seeds reproduce the
+same injected sequence by inference-request index across methods/predictors.
+Actual network delays and request counts can still differ between conditions.
+
+The manifest saves the distribution settings under `server.response_delay`.
+Request logs separate `injected_delay_ms` (sampled/clipped target), `delay_sleep_ms`
+(actual server waiting), `inference_ms`, `server_ms` (including waiting), and
+`actual_ms` (total measured request latency). The predictor sees only completed
+request RTTs, never the next injected sample. The viewer shows the last observed
+injected wait and cumulative buffer-empty steps. Live client intervals use the
+high-resolution `perf_counter` clock, avoiding Windows' coarse monotonic tick
+quantization on Python 3.11.
+
+Try a baseline, then means/stds of **60/20**, **100/30**, and **150/50 ms**.
+The current pretrained chunk has 8 steps: at a 20 ms control interval it covers
+only **160 ms**. Responses older than that are discarded and missing actions
+become zero actions. A predictor cannot recover already-expired action chunks;
+the severe setting deliberately probes this failure regime.
+
+This is application-level latency emulation. It does not reproduce WiFi packet
+loss, bandwidth limits, interference, roaming or TCP congestion behavior. See
+[the network experiment plan](docs/network_experiments.md) for staged WiFi testing
+and predictor comparisons. Disable viewing for timing comparisons.
+
 See [the experiment contract](docs/experiment.md) for timing, metrics, and later tuning.
 Upstream reference: https://github.com/Physical-Intelligence/real-time-chunking-kinetix

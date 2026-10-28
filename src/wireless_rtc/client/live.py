@@ -15,6 +15,7 @@ REQUEST_FIELDS = ["episode", "request_id", "observation_tick", "status", "actual
                   "predicted_ms", "predicted_steps", "applied_prefix_steps", "overlap_steps",
                   "prefix_clipped", "ideal_delay_steps", "arrival_tick", "elapsed_ticks",
                   "stale_response", "discard_reason", "server_ms", "inference_ms",
+                  "injected_delay_ms", "delay_sleep_ms",
                   "failed_elapsed_ms", "error"]
 TICK_FIELDS = ["episode", "tick", "wall_time_ns", "action_origin_tick", "buffer_exhausted",
                "step_wall_ms", "deadline_overrun_ms"]
@@ -65,6 +66,7 @@ def run_live_episode(client, observation, state, step, initial_actions, predicto
     pending = None
     tick = next_request_tick = exhausted = overruns = 0
     solved, error, last_ms = False, "", None
+    last_injected_ms = None
     completed_requests = stale_requests = 0
 
     def request(fields):
@@ -72,12 +74,12 @@ def run_live_episode(client, observation, state, step, initial_actions, predicto
         try:
             response, _ = client.request("infer", **fields)
             validate_actions(response, fields["observation_tick"], horizon, action_dim)
-            return response, "", time.monotonic()
+            return response, "", time.perf_counter()
         except Exception as exc:
-            return None, f"{type(exc).__name__}: {exc}", time.monotonic()
+            return None, f"{type(exc).__name__}: {exc}", time.perf_counter()
 
     def receive(arrival_tick):
-        nonlocal buffer, pending, completed_requests, stale_requests, last_ms
+        nonlocal buffer, pending, completed_requests, stale_requests, last_ms, last_injected_ms
         response, failure, received_at = pending["future"].result()
         elapsed_ms = (received_at-pending["submitted"])*1000
         row = dict(pending["row"])
@@ -91,11 +93,13 @@ def run_live_episode(client, observation, state, step, initial_actions, predicto
             row.update(request_id=response["request_id"], actual_ms=elapsed_ms,
                        ideal_delay_steps=delay_steps(elapsed_ms,control_ms), elapsed_ticks=age,
                        stale_response=stale, server_ms=response.get("server_ms"),
-                       inference_ms=response.get("inference_ms"))
+                       inference_ms=response.get("inference_ms"), injected_delay_ms=response.get("injected_delay_ms"),
+                       delay_sleep_ms=response.get("delay_sleep_ms"))
             completed_requests += 1
             if arrival_tick is not None:
                 predictor.update(elapsed_ms)
                 last_ms = elapsed_ms
+                last_injected_ms = response.get("injected_delay_ms")
                 if stale:
                     stale_requests += 1
                     row["discard_reason"] = "expired_chunk"
@@ -107,7 +111,7 @@ def run_live_episode(client, observation, state, step, initial_actions, predicto
 
     try:
         while tick < max_steps:
-            boundary = time.monotonic()
+            boundary = time.perf_counter()
             if pending is not None and pending["future"].done():
                 error = receive(tick)
                 if error:
@@ -122,20 +126,21 @@ def run_live_episode(client, observation, state, step, initial_actions, predicto
                 fields = dict(observation=observation, previous_actions=previous,
                               predicted_steps=min(raw_d,valid), overlap_steps=valid,
                               observation_tick=tick, method=method)
-                submitted = time.monotonic()
+                submitted = time.perf_counter()
                 pending = dict(row=row, submitted=submitted, future=executor.submit(request,fields))
                 next_request_tick = tick + min_execution_steps
             action, empty = buffer.action(tick)
-            started = time.monotonic()
+            started = time.perf_counter()
             observation, state, success, done = step(state,action)
-            step_ms = (time.monotonic()-started)*1000
+            step_ms = (time.perf_counter()-started)*1000
             solved = solved or success
             exhausted += int(empty)
             if viewer is not None:
                 viewer.update(state, phase="Live remote policy", tick=tick+1,
                               simulation_ms=(tick+1)*control_ms, success=solved,
-                              delay_kind="measured", predicted_ms=predictor.predict(), actual_ms=last_ms)
-            overrun_ms = max(0,(time.monotonic()-boundary)*1000-control_ms)
+                              delay_kind="measured", predicted_ms=predictor.predict(), actual_ms=last_ms,
+                              injected_delay_ms=last_injected_ms, buffer_exhaustion_steps=exhausted)
+            overrun_ms = max(0,(time.perf_counter()-boundary)*1000-control_ms)
             overruns += int(overrun_ms>0)
             write_tick(dict(episode=episode, tick=tick, wall_time_ns=time.time_ns(),
                             action_origin_tick=buffer.origin, buffer_exhausted=empty,
@@ -144,7 +149,7 @@ def run_live_episode(client, observation, state, step, initial_actions, predicto
             if done or tick >= max_steps:
                 break
             # Never execute a burst of catch-up physics steps after an overrun.
-            time.sleep(max(0,boundary+control_ms/1000-time.monotonic()))
+            time.sleep(max(0,boundary+control_ms/1000-time.perf_counter()))
         # The episode has ended: drain its request before resetting the server RNG.
         # No returned actions can leak into the next episode.
         if pending is not None:
@@ -229,7 +234,8 @@ def run_remote(config, host, port, output, metadata, timeout=120, viewer=None):
                             if viewer:
                                 viewer.update(phase="Warming physics / policy before episode", method=method,
                                               predictor=name, episode=episode+1, episodes=config["episodes"],
-                                              tick=0, success=False, actual_ms=None, delay_kind="measured")
+                                              tick=0, success=False, actual_ms=None, delay_kind="measured",
+                                              buffer_exhaustion_steps=0,injected_delay_ms=None)
                             seed = (config["seed"]+episode) % 2**32
                             key = jax.random.key(seed)
                             obs,state = sim.reset(key)

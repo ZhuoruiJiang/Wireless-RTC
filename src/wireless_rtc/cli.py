@@ -36,6 +36,11 @@ def main(argv=None):
     server.add_argument("--port", type=int, default=8765)
     server.add_argument("--checkpoint")
     server.add_argument("--level", default="worlds/l/grasp_easy.json")
+    server.add_argument("--delay", choices=["none","normal"], default="none", help="Optional extra policy response wait")
+    server.add_argument("--delay-mean-ms", type=float, default=150)
+    server.add_argument("--delay-std-ms", type=float, default=50)
+    server.add_argument("--delay-max-ms", type=float, default=1000)
+    server.add_argument("--delay-seed", type=int, default=42)
     probe = commands.add_parser("probe")
     probe.add_argument("--host", default="127.0.0.1")
     probe.add_argument("--port", type=int, default=8765)
@@ -77,11 +82,21 @@ def main(argv=None):
             parser.error("rtc-live requires a positive finite timeout and port in [1,65535]")
     if args.command == "serve":
         from wireless_rtc.server.service import serve
+        response_delay = None
+        if args.delay == "normal":
+            from wireless_rtc.server.delay import NormalResponseDelay
+            try:
+                response_delay = NormalResponseDelay(args.delay_mean_ms,args.delay_std_ms,
+                                                     args.delay_max_ms,args.delay_seed)
+            except ValueError as exc:
+                parser.error(str(exc))
         policy = None
         if args.checkpoint:
             from wireless_rtc.simulation.kinetix import KinetixPolicy
             policy = KinetixPolicy(args.checkpoint, args.level)
-        serve(args.host, args.port, policy)
+        if response_delay is not None and policy is None:
+            parser.error("--delay normal requires --checkpoint; probe waits use the probe command's --delay")
+        serve(args.host, args.port, policy, response_delay)
     elif args.command == "probe":
         from wireless_rtc.network.probe import run_probe
         source = {"kind":"fixed","value_ms":0 if args.delay == "none" else 40}

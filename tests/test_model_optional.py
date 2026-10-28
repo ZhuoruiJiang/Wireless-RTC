@@ -17,6 +17,7 @@ class PretrainedTests(unittest.TestCase):
     def test_live_rpc_with_independent_client_simulator(self):
         from wireless_rtc.client.live import run_remote
         from wireless_rtc.server.service import make_server
+        from wireless_rtc.server.delay import NormalResponseDelay
         from wireless_rtc.simulation.kinetix import KinetixPolicy, KinetixSimulator
         from wireless_rtc.simulation.viewer import SimulationViewer
         policy = KinetixPolicy(os.environ["RTC_CHECKPOINT"])
@@ -26,7 +27,8 @@ class PretrainedTests(unittest.TestCase):
         config = json.loads(Path("configs/rtc_remote.json").read_text())
         config.update(episodes=1,methods=["rtc","naive"],
                       predictors={"recent_max": config["predictors"]["recent_max"]})
-        server = make_server("127.0.0.1",0,policy)
+        server = make_server("127.0.0.1",0,policy,
+                             response_delay=NormalResponseDelay(mean_ms=25,std_ms=5,max_ms=100))
         thread = threading.Thread(target=server.serve_forever,daemon=True)
         thread.start()
         try:
@@ -37,6 +39,7 @@ class PretrainedTests(unittest.TestCase):
                 manifest = json.loads((root/"manifest.json").read_text())
                 self.assertEqual(manifest["status"],"completed")
                 self.assertEqual(manifest["server"]["checkpoint_sha256"],policy.checkpoint_sha256)
+                self.assertEqual(manifest["server"]["response_delay"]["kind"],"clipped_normal")
                 self.assertTrue(viewer.status()["phase"].startswith("Completed"))
                 for method in config["methods"]:
                     directory = root/f"{method}-recent_max"
@@ -44,6 +47,7 @@ class PretrainedTests(unittest.TestCase):
                         rows = list(csv.DictReader(f))
                     self.assertTrue(rows)
                     self.assertTrue(all(r["status"] == "ok" and float(r["actual_ms"]) > 0 for r in rows))
+                    self.assertTrue(all(float(r["injected_delay_ms"]) > 0 for r in rows))
                     with (directory/"ticks.csv").open() as f:
                         self.assertEqual(len(list(csv.DictReader(f))),8)
         finally:

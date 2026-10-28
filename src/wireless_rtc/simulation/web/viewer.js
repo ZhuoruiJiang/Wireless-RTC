@@ -29,6 +29,10 @@
     text("success", state.success == null ? "—" : state.success ? "Yes" : "No");
     text("prediction", milliseconds(state.predicted_ms));
     text("actual", milliseconds(state.actual_ms));
+    element("injection-row").hidden = !number(state.injected_delay_ms);
+    text("injection", milliseconds(state.injected_delay_ms));
+    element("exhaustion-row").hidden = !number(state.buffer_exhaustion_steps);
+    text("exhaustion", state.buffer_exhaustion_steps ?? "—");
     text("delay-label", state.delay_kind === "measured" ? "Measured RTT" : "Injected delay");
     const error = state.error || snapshot.renderer.error;
     notice(error);

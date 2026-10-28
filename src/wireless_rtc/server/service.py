@@ -3,7 +3,7 @@ import time
 from wireless_rtc.protocol.messages import receive_message, send_message
 
 
-def make_server(host="127.0.0.1", port=8765, policy=None):
+def make_server(host="127.0.0.1", port=8765, policy=None, response_delay=None):
     class Handler(socketserver.StreamRequestHandler):
         def handle(self):
             self.connection.settimeout(60)
@@ -23,10 +23,19 @@ def make_server(host="127.0.0.1", port=8765, policy=None):
                         result = {"payload": request.get("payload", "")}
                     elif operation == "infer" and policy is not None:
                         result = policy.infer(request)
+                        injected_ms = response_delay.sample() if response_delay is not None else 0.
+                        wait_started = time.perf_counter()
+                        if injected_ms:
+                            time.sleep(injected_ms/1000)
+                        result.update(injected_delay_ms=injected_ms,
+                                      delay_sleep_ms=(time.perf_counter()-wait_started)*1000 if injected_ms else 0.)
                     elif operation == "describe" and policy is not None:
                         result = policy.describe()
+                        result["response_delay"] = response_delay.describe() if response_delay is not None else {"kind":"none"}
                     elif operation == "initialize" and policy is not None:
                         result = policy.initialize(request)
+                        if response_delay is not None:
+                            response_delay.reset(request["seed"])
                     else:
                         raise ValueError("Unsupported operation or no policy loaded")
                     response = dict(request_id=request["request_id"], status="ok",
@@ -43,7 +52,9 @@ def make_server(host="127.0.0.1", port=8765, policy=None):
     return Server((host, port), Handler)
 
 
-def serve(host, port, policy=None):
-    with make_server(host, port, policy) as server:
+def serve(host, port, policy=None, response_delay=None):
+    with make_server(host, port, policy, response_delay) as server:
         print(f"Listening on {host}:{server.server_address[1]}", flush=True)
+        if response_delay is not None:
+            print(f"Injected response delay: {response_delay.describe()}",flush=True)
         server.serve_forever()
