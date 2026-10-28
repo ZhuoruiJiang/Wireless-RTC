@@ -1,129 +1,140 @@
-"""Exercise real HTTP streams and ensure rendering never queues controller states."""
-import http.client
+"""Public HTTP and concurrency contracts for the canvas viewer."""
+import base64
 import json
+import socket
 import threading
+import time
 import unittest
 from unittest.mock import patch
-from urllib.request import urlopen
 from urllib.error import HTTPError
+from urllib.request import urlopen
 
 from wireless_rtc.cli import main
 from wireless_rtc.simulation.viewer import SimulationViewer
 
+JPEG = b"\xff\xd8test-image\xff\xd9"
+
+
+def eventually(predicate, timeout=3):
+    deadline = time.monotonic()+timeout
+    while time.monotonic() < deadline:
+        result = predicate()
+        if result:
+            return result
+        time.sleep(.005)
+    raise AssertionError("Timed out waiting for viewer state")
+
 
 class ViewerTests(unittest.TestCase):
-    def test_page_status_and_multipart_frame(self):
-        jpeg = b"\xff\xd8test-frame\xff\xd9"
-        with SimulationViewer(port=0, fps=60) as viewer:
-            base = f"http://127.0.0.1:{viewer.port}"
-            with urlopen(base, timeout=3) as response:
-                self.assertIn(b'src="/frame.jpg"', response.read())
-                self.assertEqual(response.headers["Cache-Control"], "no-store")
-            viewer.set_renderer(lambda state: jpeg)
-            viewer.update(object(), phase="Running", tick=12, success=False)
-            with urlopen(base+"/status.json", timeout=3) as response:
-                status = json.load(response)
-                self.assertEqual(status["tick"], 12)
-                self.assertEqual(status["phase"], "Running")
-            connection = http.client.HTTPConnection("127.0.0.1", viewer.port, timeout=3)
-            try:
-                connection.request("GET", "/stream.mjpg")
-                response = connection.getresponse()
-                self.assertEqual(response.status, 200)
-                self.assertIn("boundary=frame", response.getheader("Content-Type"))
-                self.assertEqual(response.readline(), b"--frame\r\n")
-                self.assertEqual(response.readline(), b"Content-Type: image/jpeg\r\n")
-                length = int(response.readline().split(b":")[1])
-                self.assertEqual(response.readline(), b"\r\n")
-                self.assertEqual(response.read(length), jpeg)
-                # A single final image must have a completed multipart delimiter.
-                self.assertEqual(response.readline(), b"\r\n")
-                self.assertEqual(response.readline(), b"--frame\r\n")
-            finally:
-                connection.close()
-
-    def test_snapshot_waits_then_serves_final_frame_and_reconnects(self):
-        jpeg = b"\xff\xd8final-frame\xff\xd9"
+    def test_packaged_page_and_assets_are_served(self):
         with SimulationViewer(port=0) as viewer:
-            url = f"http://127.0.0.1:{viewer.port}/frame.jpg"
-            with self.assertRaises(HTTPError) as error:
-                urlopen(url,timeout=3)
-            self.assertEqual(error.exception.code,503)
-            self.assertEqual(error.exception.headers["Retry-After"],"1")
-            error.exception.close()
-            viewer.set_renderer(lambda state:jpeg)
-            viewer.update(object(),phase="Completed")
-            with viewer._condition:
-                ready = viewer._condition.wait_for(lambda:viewer._jpeg is not None,timeout=3)
-            self.assertTrue(ready)
-            # Browser retries, late connections, and refreshes all get a finite JPEG
-            # response even though no further simulation states are produced.
-            for suffix in ["", "?v=1", "?v=2"]:
-                with urlopen(url+suffix,timeout=3) as response:
-                    self.assertEqual(response.headers["Content-Type"],"image/jpeg")
+            for path,content_type,marker in [("/","text/html",b'<canvas id="scene"'),
+                                             ("/viewer.js","text/javascript",b"createImageBitmap"),
+                                             ("/viewer.css","text/css",b".workspace")]:
+                with urlopen(f"http://127.0.0.1:{viewer.port}{path}",timeout=3) as response:
+                    self.assertIn(content_type,response.headers["Content-Type"])
                     self.assertEqual(response.headers["Cache-Control"],"no-store")
-                    self.assertEqual(response.read(),jpeg)
-            self.assertTrue(viewer.status()["frame_ready"])
-            self.assertEqual(viewer.status()["frame_sequence"],1)
+                    self.assertIn(marker,response.read())
+            with self.assertRaises(HTTPError) as error:
+                urlopen(f"http://127.0.0.1:{viewer.port}/../pyproject.toml",timeout=3)
+            self.assertEqual(error.exception.code,404)
+            error.exception.close()
 
-    def test_slow_renderer_drops_intermediate_states(self):
-        started, release, latest_rendered = threading.Event(), threading.Event(), threading.Event()
+    def test_api_startup_final_frame_cursors_and_restart(self):
+        with SimulationViewer(port=0) as viewer:
+            base = f"http://127.0.0.1:{viewer.port}/api/snapshot"
+            with urlopen(base,timeout=3) as response:
+                initial = json.load(response)
+            self.assertIsNone(initial["frame"])
+            self.assertEqual(initial["renderer"]["phase"],"waiting")
+            viewer.set_renderer(lambda state:JPEG)
+            viewer.update(0,tick=42,phase="Completed")
+            eventually(lambda:viewer.status()["frame_ready"])
+            with urlopen(base,timeout=3) as response:
+                snapshot = json.load(response)
+            frame,session = snapshot["frame"],snapshot["session"]
+            self.assertEqual(base64.b64decode(frame["jpeg"]),JPEG)
+            self.assertEqual(frame["state"]["tick"],42)
+            exposed = viewer.snapshot()
+            exposed["frame"]["state"]["tick"] = -1
+            self.assertEqual(viewer.snapshot()["frame"]["state"]["tick"],42)
+            with urlopen(f"{base}?session={session}&after={frame['sequence']}",timeout=3) as response:
+                self.assertIsNone(json.load(response)["frame"])
+            # An old browser must receive a final image even if its old cursor is higher.
+            with urlopen(f"{base}?session=previous-server&after=999999",timeout=3) as response:
+                self.assertEqual(json.load(response)["frame"],frame)
+            for value in ["-1","nan","abc"]:
+                with self.assertRaises(HTTPError) as error:
+                    urlopen(f"{base}?after={value}",timeout=3)
+                self.assertEqual(error.exception.code,400)
+                error.exception.close()
+        with SimulationViewer(port=0) as restarted:
+            self.assertNotEqual(restarted.snapshot()["session"],session)
+
+    def test_slow_rendering_keeps_latest_state_and_matching_metadata(self):
+        started,release = threading.Event(),threading.Event()
         seen = []
-
-        def renderer(state):
+        def render(state):
             seen.append(state)
             if state == 0:
                 started.set()
                 if not release.wait(3):
-                    raise TimeoutError("test did not release renderer")
-            if state == 1000:
-                latest_rendered.set()
-            return b"jpeg"
-
-        with SimulationViewer(port=0, fps=60) as viewer:
-            viewer.set_renderer(renderer)
-            viewer.update(0)
+                    raise TimeoutError("Test did not release renderer")
+            return JPEG
+        with SimulationViewer(port=0,fps=60) as viewer:
+            viewer.set_renderer(render)
+            viewer.update(0,tick=0)
             self.assertTrue(started.wait(3))
             try:
-                # Producer keeps running even with a renderer deliberately blocked.
-                for state in range(1,1001):
-                    viewer.update(state, tick=state)
-                self.assertEqual(viewer.status()["tick"], 1000)
+                for tick in range(1,1001):
+                    viewer.update(tick,tick=tick)
+                self.assertEqual(viewer.snapshot()["state"]["tick"],1000)
             finally:
                 release.set()
-            self.assertTrue(latest_rendered.wait(3))
-            self.assertEqual(seen, [0,1000])
+            snapshot = eventually(lambda: (s if (s:=viewer.snapshot())["frame"] and s["frame"]["state"]["tick"] == 1000 else None))
+            self.assertEqual(seen,[0,1000])
+            self.assertEqual(snapshot["frame"]["state"]["tick"],1000)
+            viewer.update(tick=1001)
+            self.assertEqual(viewer.snapshot()["state"]["tick"],1001)
+            self.assertEqual(viewer.snapshot()["frame"]["state"]["tick"],1000)
 
-    def test_render_failure_is_visible_without_crashing_producer(self):
+    def test_render_errors_are_visible_and_renderer_can_recover(self):
         with SimulationViewer(port=0) as viewer:
             def broken(state):
-                raise RuntimeError("missing renderer dependency")
+                raise RuntimeError("Renderer unavailable")
             viewer.set_renderer(broken)
-            viewer.update(object())
-            viewer._render_thread.join(timeout=3)
-            self.assertFalse(viewer._render_thread.is_alive())
-            self.assertIn("missing renderer dependency", viewer.status()["viewer_error"])
-            viewer.update(tick=50)
-            self.assertEqual(viewer.status()["tick"], 50)
+            viewer.update(0,tick=1)
+            eventually(lambda:viewer.snapshot()["renderer"]["error"])
+            self.assertIn("Renderer unavailable",viewer.snapshot()["renderer"]["error"])
+            viewer.update(tick=2)
+            self.assertEqual(viewer.status()["tick"],2)
+            viewer.set_renderer(lambda state:JPEG)
+            eventually(lambda:viewer.status()["frame_ready"])
+            self.assertIsNone(viewer.snapshot()["renderer"]["error"])
 
-    def test_close_wakes_browser_waiting_for_first_frame(self):
+    def test_incomplete_image_is_reported_and_close_is_idempotent(self):
         viewer = SimulationViewer(port=0)
-        connection = http.client.HTTPConnection("127.0.0.1", viewer.port, timeout=3)
-        try:
-            connection.request("GET", "/stream.mjpg")
-            response = connection.getresponse()
-            viewer.close()
-            self.assertEqual(response.read(), b"--frame\r\n")
-            self.assertFalse(viewer._render_thread.is_alive())
-            self.assertFalse(viewer._http_thread.is_alive())
-        finally:
-            connection.close()
+        viewer.set_renderer(lambda state:b"not-an-image")
+        viewer.update(0)
+        eventually(lambda:viewer.snapshot()["renderer"]["error"])
+        self.assertIn("complete JPEG",viewer.status()["viewer_error"])
+        viewer.close()
+        viewer.close()
+        self.assertFalse(viewer._http_thread.is_alive())
+        self.assertFalse(viewer._render_thread.is_alive())
 
-    def test_invalid_cli_viewer_options_fail_before_loading_policy(self):
-        for options in [["--view-pace"], ["--view-fps", "nan"], ["--view-port", "0"]]:
-            with self.subTest(options=options), patch("sys.stderr"), self.assertRaises(SystemExit) as result:
-                main(["rtc", "--checkpoint", "missing.pkl", "--output", "unused", *options])
-            self.assertEqual(result.exception.code, 2)
+    def test_invalid_and_occupied_ports_fail_before_policy_load(self):
+        for options in [["--view-pace"],["--view-fps","nan"],["--view-port","0"]]:
+            with self.subTest(options=options),patch("sys.stderr"),self.assertRaises(SystemExit) as result:
+                main(["rtc","--checkpoint","missing.pkl","--output","unused",*options])
+            self.assertEqual(result.exception.code,2)
+        with socket.socket() as occupied:
+            occupied.bind(("127.0.0.1",0))
+            occupied.listen()
+            with patch("sys.stderr"),self.assertRaises(SystemExit) as result:
+                main(["rtc","--checkpoint","missing.pkl","--output","unused","--view",
+                      "--view-port",str(occupied.getsockname()[1])])
+            self.assertEqual(result.exception.code,2)
 
 
 if __name__ == "__main__":

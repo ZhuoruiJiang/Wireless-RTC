@@ -9,4 +9,6 @@ runs/
 
 .deps/
 .tmp/
+build/
+dist/
 vendor/jaxued/

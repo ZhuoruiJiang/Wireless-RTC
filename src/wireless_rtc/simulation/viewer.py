@@ -1,104 +1,52 @@
-"""Loopback MJPEG viewer with a single latest-state slot (no frame backlog)."""
+"""Local canvas viewer with isolated rendering and atomic HTTP snapshots."""
+import base64
+from dataclasses import dataclass
+from importlib.resources import files
 import json
 import math
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
+import uuid
 
 
-PAGE = rb"""<!doctype html>
-<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width">
-<title>RTC simulation</title>
-<style>
-body{font:16px system-ui;background:#101827;color:#e6edf7;max-width:900px;margin:32px auto;padding:0 20px}
-h1{font-size:26px}img{display:block;width:min(100%,640px,60vh);aspect-ratio:1;background:#202c40;border-radius:12px}
-#status{padding:16px 0;line-height:1.7;white-space:pre-wrap}p{color:#aebbd0}
-</style>
-<h1>RTC simulation</h1>
-<p>Live Kinetix view. Frames may be skipped; simulation time can differ from wall time.</p>
-<img id="frame" src="/frame.jpg" alt="Waiting for a rendered simulation frame">
-<div id="frame-status" role="status">Waiting for a rendered simulation frame...</div>
-<div id="status" role="status">Connecting...</div>
-<p>Viewing adds rendering overhead. Disable the viewer for timing measurements.</p>
-<script>
-let displayedFrame=null;
-let frameFps=10;
-async function refreshFrame(){
- const controller=new AbortController();
- const timeout=setTimeout(()=>controller.abort(),5000);
- let nextFrame=null;
- try{
-  const response=await fetch('/frame.jpg',{cache:'no-store',signal:controller.signal});
-  if(response.status===503){
-   document.querySelector('#frame-status').textContent='Waiting for rendering / compilation; retrying automatically...';
-   return;
-  }
-  if(!response.ok)throw Error('HTTP '+response.status);
-  nextFrame=URL.createObjectURL(await response.blob());
-  const decoded=new Image();
-  decoded.src=nextFrame;
-  await decoded.decode();
-  const frame=document.querySelector('#frame');
-  frame.src=nextFrame;
-  frame.alt='Kinetix simulation';
-  if(displayedFrame)URL.revokeObjectURL(displayedFrame);
-  displayedFrame=nextFrame;
-  nextFrame=null;
-  document.querySelector('#frame-status').textContent='Simulation image received';
- }catch(e){
-  document.querySelector('#frame-status').textContent='Image connection unavailable; retrying automatically...';
- }finally{
-  clearTimeout(timeout);
-  if(nextFrame)URL.revokeObjectURL(nextFrame);
-  setTimeout(refreshFrame,1000/frameFps);
- }
-}
-async function refresh(){
- try{
-  const response=await fetch('/status.json',{cache:'no-store',signal:AbortSignal.timeout(5000)});
-  if(!response.ok)throw Error('HTTP '+response.status);
-  const s=await response.json();
-  frameFps=Math.max(1,Math.min(60,s.viewer_fps||10));
-  let lines=[s.phase];
-  if(s.method)lines.push('Method: '+s.method+' | Predictor: '+s.predictor);
-  if(s.episode!==undefined)lines.push('Episode: '+s.episode+' / '+s.episodes+' | Tick: '+s.tick);
-  if(s.simulation_ms!==undefined)lines.push('Simulation time: '+(s.simulation_ms/1000).toFixed(2)+' s | Success: '+s.success);
-  if(s.predicted_ms!==undefined){
-   const actual=s.actual_ms==null?'awaiting response':s.actual_ms.toFixed(2)+' ms';
-   lines.push('Predicted delay: '+s.predicted_ms.toFixed(2)+' ms | '+(s.delay_kind==='measured'?'Measured RTT: ':'Injected delay: ')+actual);
-  }
-  if(s.viewer_error)lines.push('Rendering error: '+s.viewer_error);
-  if(s.error)lines.push(s.error);
-  document.querySelector('#status').textContent=lines.join('\n');
- }catch(e){document.querySelector('#status').textContent='Viewer disconnected. Check the server and SSH tunnel.';}
- setTimeout(refresh,750);
-}
-refresh();
-refreshFrame();
-</script></html>"""
+@dataclass(frozen=True)
+class Frame:
+    sequence: int
+    jpeg: bytes
+    state: dict
+    rendered_at: float
+    render_ms: float
 
 
 class SimulationViewer:
-    """Render immutable simulator states off the controller thread.
+    """One pending immutable state, one completed image, no frame backlog.
 
-    The renderer returns JPEG bytes. Only the latest state and JPEG are retained;
-    browser writes never hold the producer lock. GPU rendering can still compete
-    with inference for resources, so this mode is for functional inspection.
+    Physics only publishes references. Rendering, encoding, and browser traffic
+    run separately. Every image retains metadata from the state it depicts.
     """
 
     def __init__(self, port=8080, fps=10):
         if not math.isfinite(fps) or not 0 < fps <= 60:
             raise ValueError("Viewer fps must be in (0,60]")
         self.fps = fps
+        self._session = uuid.uuid4().hex
         self._condition = threading.Condition()
-        self._closed = False
+        self._stop = threading.Event()
         self._renderer = None
+        self._generation = 0
         self._state = None
+        self._version = 0
+        self._frame = None
         self._sequence = 0
-        self._jpeg = None
-        self._frame_sequence = 0
-        self._status = {"phase": "Loading policy / compiling; the first frame may take a while."}
+        self._render_phase = "waiting"
+        self._render_error = None
+        self._status = {"phase": "Starting simulation"}
+        assets = files("wireless_rtc.simulation").joinpath("web")
+        routes = {"/": (assets.joinpath("index.html").read_bytes(), "text/html; charset=utf-8"),
+                  "/viewer.css": (assets.joinpath("viewer.css").read_bytes(), "text/css; charset=utf-8"),
+                  "/viewer.js": (assets.joinpath("viewer.js").read_bytes(), "text/javascript; charset=utf-8")}
         viewer = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -106,60 +54,31 @@ class SimulationViewer:
                 pass
 
             def do_GET(self):
-                path = urlsplit(self.path).path
-                if path == "/stream.mjpg":
-                    self.connection.settimeout(3)
+                self.connection.settimeout(5)
+                parsed = urlsplit(self.path)
+                code = 200
+                if parsed.path in routes:
+                    body, content_type = routes[parsed.path]
+                elif parsed.path == "/api/snapshot":
+                    query = parse_qs(parsed.query)
                     try:
-                        self.send_response(200)
-                        self.send_header("Content-Type", "multipart/x-mixed-replace; boundary=frame")
-                        self.send_header("Cache-Control", "no-store")
-                        self.end_headers()
-                        self.wfile.write(b"--frame\r\n")
-                        last = -1
-                        while True:
-                            with viewer._condition:
-                                viewer._condition.wait_for(lambda: viewer._closed or (
-                                    viewer._jpeg is not None and viewer._frame_sequence != last), timeout=1)
-                                if viewer._closed:
-                                    return
-                                if viewer._jpeg is None:
-                                    continue
-                                jpeg, last = viewer._jpeg, viewer._frame_sequence
-                            # Delimit the completed part immediately. A late browser
-                            # must display a single/final frame without waiting for
-                            # another simulation update. Repeat it after idle waits.
-                            self.wfile.write(b"Content-Type: image/jpeg\r\nContent-Length: "
-                                             + str(len(jpeg)).encode() + b"\r\n\r\n" + jpeg + b"\r\n--frame\r\n")
-                            self.wfile.flush()
-                    except OSError:
-                        pass  # A closed/slow browser must not block the simulation.
-                    return
-                status_code = 200
-                if path == "/":
-                    body, content_type = PAGE, "text/html; charset=utf-8"
-                elif path == "/status.json":
-                    body = json.dumps(viewer.status()).encode()
-                    content_type = "application/json"
-                elif path == "/frame.jpg":
-                    with viewer._condition:
-                        body = viewer._jpeg
-                    if body is None:
-                        status_code = 503
-                        body, content_type = b"Waiting for a rendered simulation frame", "text/plain"
-                    else:
-                        content_type = "image/jpeg"
+                        after = int(query.get("after", ["0"])[0])
+                        if after < 0:
+                            raise ValueError
+                        payload = viewer.snapshot(after, query.get("session", [None])[0])
+                    except ValueError:
+                        code, payload = 400, {"error": "after must be a nonnegative integer"}
+                    body, content_type = json.dumps(payload, allow_nan=False).encode(), "application/json"
                 else:
-                    self.send_error(404)
-                    return
-                self.send_response(status_code)
-                self.send_header("Content-Type", content_type)
-                self.send_header("Content-Length", str(len(body)))
-                self.send_header("Cache-Control", "no-store")
-                self.send_header("X-Content-Type-Options", "nosniff")
-                if status_code == 503:
-                    self.send_header("Retry-After", "1")
-                self.end_headers()
+                    code, body, content_type = 404, b"Not found", "text/plain; charset=utf-8"
                 try:
+                    self.send_response(code)
+                    self.send_header("Content-Type", content_type)
+                    self.send_header("Content-Length", str(len(body)))
+                    self.send_header("Cache-Control", "no-store")
+                    self.send_header("X-Content-Type-Options", "nosniff")
+                    self.send_header("Content-Security-Policy", "default-src 'self'; img-src 'self' blob:; frame-ancestors 'none'")
+                    self.end_headers()
                     self.wfile.write(body)
                 except OSError:
                     pass
@@ -178,6 +97,10 @@ class SimulationViewer:
     def set_renderer(self, renderer):
         with self._condition:
             self._renderer = renderer
+            self._generation += 1
+            self._version += 1
+            self._render_error = None
+            self._render_phase = "waiting"
             self._condition.notify_all()
 
     def update(self, state=None, **status):
@@ -185,41 +108,68 @@ class SimulationViewer:
             self._status.update(status)
             if state is not None:
                 self._state = state
-                self._sequence += 1
+                self._version += 1
             self._condition.notify_all()
 
     def status(self):
         with self._condition:
-            return dict(self._status, viewer_fps=self.fps, frame_sequence=self._frame_sequence,
-                        frame_ready=self._jpeg is not None)
+            return dict(self._status, viewer_error=self._render_error, frame_ready=self._frame is not None)
+
+    def snapshot(self, after=0, session=None):
+        """Copy coherent state under the lock; encode images outside that lock."""
+        with self._condition:
+            frame = self._frame
+            payload = dict(session=self._session, fps=self.fps, state=dict(self._status),
+                           renderer=dict(phase=self._render_phase, error=self._render_error), frame=None)
+        if frame is not None:
+            payload["renderer"].update(sequence=frame.sequence, render_ms=frame.render_ms,
+                                      age_ms=max(0,(time.monotonic()-frame.rendered_at)*1000))
+            if session != self._session or frame.sequence > after:
+                payload["frame"] = dict(sequence=frame.sequence, state=dict(frame.state),
+                                        jpeg=base64.b64encode(frame.jpeg).decode("ascii"))
+        return payload
 
     def _render_loop(self):
-        last, next_frame = 0, 0.
-        while True:
+        consumed, next_frame = -1, 0.
+        while not self._stop.is_set():
             with self._condition:
-                self._condition.wait_for(lambda: self._closed or (
-                    self._renderer is not None and self._sequence != last))
-                if self._closed:
-                    return
-                remaining = next_frame - time.monotonic()
-                if remaining > 0:
-                    self._condition.wait(timeout=remaining)
-                    continue
-                state, last, renderer = self._state, self._sequence, self._renderer
+                self._condition.wait_for(lambda: self._stop.is_set() or (
+                    self._renderer is not None and self._state is not None and self._version > consumed))
+            if self._stop.wait(max(0,next_frame-time.monotonic())):
+                break
+            with self._condition:
+                renderer, generation = self._renderer, self._generation
+                state, version, status = self._state, self._version, dict(self._status)
+                self._render_phase = "rendering"
+            started = time.monotonic()
             try:
                 jpeg = renderer(state)
+                if not isinstance(jpeg, bytes) or not jpeg.startswith(b"\xff\xd8") or not jpeg.endswith(b"\xff\xd9"):
+                    raise ValueError("Renderer must return a complete JPEG image")
             except Exception as exc:
-                self.update(viewer_error=f"{type(exc).__name__}: {exc}")
-                return
+                with self._condition:
+                    if generation == self._generation:
+                        self._render_error = f"{type(exc).__name__}: {exc}"
+                        self._render_phase = "error"
+                        self._renderer = None
+                continue
             with self._condition:
-                self._jpeg = jpeg
-                self._frame_sequence += 1
+                if self._stop.is_set():
+                    break
+                if generation != self._generation:
+                    continue
+                self._sequence += 1
+                self._frame = Frame(self._sequence,jpeg,status,time.monotonic(),(time.monotonic()-started)*1000)
+                self._render_phase = "ready"
+                consumed = version
                 self._condition.notify_all()
-            next_frame = time.monotonic() + 1 / self.fps
+            next_frame = time.monotonic()+1/self.fps
 
     def close(self):
         with self._condition:
-            self._closed = True
+            if self._stop.is_set():
+                return
+            self._stop.set()
             self._condition.notify_all()
         self._server.shutdown()
         self._server.server_close()

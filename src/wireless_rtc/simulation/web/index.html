@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RTC · Simulation viewer</title>
+<link rel="stylesheet" href="/viewer.css"><script src="/viewer.js" defer></script>
+</head><body><main>
+<header><div><p class="eyebrow">WIRELESS RTC / KINETIX</p><h1>Simulation viewer</h1></div>
+<div id="connection" class="badge" data-mode="connecting" role="status">Connecting</div></header>
+<section class="workspace"><div class="visual">
+<div class="stage"><canvas id="scene" width="512" height="512" aria-label="Kinetix physics simulation"></canvas>
+<div id="placeholder"><span class="spinner"></span><h2>Starting the viewer</h2><p id="waiting">Connecting to your local simulation…</p></div></div>
+<div class="toolbar"><span id="frame-info">No frame received yet</span><button id="pause" type="button">Pause view</button></div>
+<p class="hint">Pausing the view does not pause the experiment.</p></div>
+<aside><section class="panel"><p class="eyebrow">EXPERIMENT</p><h2 id="phase">Waiting for simulation</h2>
+<dl><div><dt>Method</dt><dd id="method">—</dd></div><div><dt>Predictor</dt><dd id="predictor">—</dd></div>
+<div><dt>Episode</dt><dd id="episode">—</dd></div><div><dt>Simulation tick</dt><dd id="tick">—</dd></div>
+<div><dt>Simulation time</dt><dd id="sim-time">—</dd></div><div><dt>Success</dt><dd id="success">—</dd></div></dl></section>
+<section class="panel"><p class="eyebrow">RESPONSE DELAY</p><div class="delays"><div><span>Predicted</span><strong id="prediction">—</strong></div><div><span id="delay-label">Measured RTT</span><strong id="actual">—</strong></div></div></section>
+<section id="notice" class="notice" role="alert" hidden></section><button id="retry" class="retry" type="button">Reconnect now</button>
+<p class="hint">Frames stay on the simulator machine. Viewing adds rendering overhead; disable it for timing measurements.</p></aside></section>
+<noscript>This viewer requires JavaScript to display simulation frames.</noscript>
+</main></body></html>

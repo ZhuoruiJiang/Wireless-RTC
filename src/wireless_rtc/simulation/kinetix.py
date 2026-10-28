@@ -62,7 +62,8 @@ class KinetixSimulator:
         self.step = jax.jit(step)
 
     def make_frame_renderer(self):
-        return _make_frame_renderer(self)
+        from wireless_rtc.simulation.rendering import KinetixFrameRenderer
+        return KinetixFrameRenderer(self)
 
 
 class KinetixPolicy(KinetixSimulator):
@@ -139,27 +140,6 @@ class KinetixPolicy(KinetixSimulator):
         return dict(actions=np.asarray(chunk).tolist(), observation_tick=tick,
                     inference_ms=(time.perf_counter()-start)*1000)
 
-
-def _make_frame_renderer(self):
-    # Import/compile lazily on the viewer thread; normal runs pay no rendering cost.
-    render = None
-
-    def jpeg(state):
-        nonlocal render
-        import io
-        from PIL import Image
-        if render is None:
-            from kinetix.render.renderer_pixels import make_render_pixels
-            pixels = make_render_pixels(self.params, self.static.replace(downscale=2))
-            # Match upstream video orientation: x/y transpose, then vertical flip.
-            render = self.jax.jit(lambda s: pixels(s).round().clip(0,255)
-                                  .astype(self.jnp.uint8).transpose(1,0,2)[::-1])
-        frame = self.np.asarray(render(state))
-        output = io.BytesIO()
-        Image.fromarray(frame).save(output, format="JPEG", quality=80)
-        return output.getvalue()
-
-    return jpeg
 
 def run_experiment(config, checkpoint, output, metadata, viewer=None, view_pace=False):
     if config["episodes"] < 1 or config["min_execution_steps"] < 1:

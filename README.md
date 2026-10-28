@@ -214,9 +214,19 @@ method, predictor, episode, simulation tick, success, and injected/predicted del
 The viewer starts before loading/compiling the policy; the first frame can take
 a while, especially during JAX compilation. Render errors appear on the page.
 After completion, the viewer retains the final frame and stays open until Ctrl+C.
-The page polls finite JPEG responses and retries automatically after startup or a
-connection interruption, so a late browser can display the final frame too. The
-optional `/stream.mjpg` endpoint remains available for direct MJPEG clients.
+The canvas viewer uses a single `/api/snapshot` endpoint that delivers simulation
+progress and new frames together. Images retain the tick/episode metadata of the
+state they depict. Each browser tracks a session ID and frame number, so it can
+join after completion or reconnect after the server restarts. The former image
+and MJPEG endpoints have been replaced.
+
+The page explicitly shows connecting, warming, live, completed, disconnected, and
+render-error states. **Pause view** freezes only the display; physics continues.
+**Reconnect now** retries immediately. The canvas retains the last good frame
+through interruptions, and the frame caption identifies its tick. New HTML, CSS,
+and JavaScript assets ship with the Python package; no frontend build or external
+web service is required. Port conflicts produce an actionable command-line error.
+If the experiment fails, the viewer remains open to show the error until Ctrl+C.
 Use a fresh output directory on each run. Ctrl+C during a run stops it; partial
 output is not a completed experiment.
 

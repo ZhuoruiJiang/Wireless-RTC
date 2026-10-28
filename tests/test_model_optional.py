@@ -2,11 +2,12 @@
 import os
 import io
 import csv
-import http.client
+import base64
 import json
 from pathlib import Path
 import tempfile
 import threading
+import time
 import unittest
 from unittest.mock import patch
 
@@ -88,19 +89,14 @@ class PretrainedTests(unittest.TestCase):
             with SimulationViewer(port=0) as viewer:
                 run_experiment(config, checkpoint, root/"view", {}, viewer=viewer)
                 self.assertTrue(viewer.status()["phase"].startswith("Completed"))
-                connection = http.client.HTTPConnection("127.0.0.1", viewer.port, timeout=30)
-                try:
-                    connection.request("GET", "/stream.mjpg")
-                    response = connection.getresponse()
-                    self.assertEqual(response.readline(), b"--frame\r\n")
-                    self.assertEqual(response.readline(), b"Content-Type: image/jpeg\r\n")
-                    size = int(response.readline().split(b":")[1])
-                    response.readline()
-                    from PIL import Image
-                    with Image.open(io.BytesIO(response.read(size))) as image:
-                        image.verify()
-                finally:
-                    connection.close()
+                deadline = time.monotonic()+30
+                while not viewer.status()["frame_ready"] and time.monotonic() < deadline:
+                    time.sleep(.02)
+                snapshot = viewer.snapshot()
+                self.assertIsNotNone(snapshot["frame"])
+                from PIL import Image
+                with Image.open(io.BytesIO(base64.b64decode(snapshot["frame"]["jpeg"]))) as image:
+                    image.verify()
             for filename in ["episodes.csv", "requests.csv"]:
                 conditions = []
                 for directory in ["plain", "view"]:

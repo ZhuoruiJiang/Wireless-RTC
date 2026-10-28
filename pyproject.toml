@@ -15,6 +15,9 @@ wireless-rtc = "wireless_rtc.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+wireless_rtc = ["simulation/web/*.html", "simulation/web/*.css", "simulation/web/*.js"]
+
 [tool.uv]
 # OneDrive-backed Windows checkouts cannot reliably use cache hardlinks.
 link-mode = "copy"

@@ -104,16 +104,32 @@ def main(argv=None):
         else:
             import time
             from wireless_rtc.simulation.viewer import SimulationViewer
-            with SimulationViewer(args.view_port, args.view_fps) as viewer:
+            try:
+                viewer = SimulationViewer(args.view_port,args.view_fps)
+            except OSError as exc:
+                parser.error(f"Cannot open viewer port {args.view_port}: {exc}. Try another --view-port.")
+            with viewer:
                 location = "local browser" if args.command == "rtc-live" else "forward this port over SSH"
                 print(f"RTC viewer: http://127.0.0.1:{viewer.port} ({location})", flush=True)
+                exit_code = 0
                 try:
                     run(viewer)
                     print("Run complete. Viewer remains open; press Ctrl+C to exit.", flush=True)
+                except Exception as exc:
+                    import sys
+                    exit_code = 1
+                    viewer.update(phase="Run failed",error=f"{type(exc).__name__}: {exc}")
+                    print(f"Run failed: {exc}. Viewer remains open for inspection; Ctrl+C exits.",file=sys.stderr,flush=True)
+                except KeyboardInterrupt:
+                    print("Stopping RTC viewer.",flush=True)
+                    return
+                try:
                     while True:
                         time.sleep(.5)
                 except KeyboardInterrupt:
                     print("Stopping RTC viewer.", flush=True)
+                if exit_code:
+                    raise SystemExit(exit_code)
     else:
         config = json.loads(Path(args.config).read_text(encoding="utf-8"))
         output = Path(args.output)
