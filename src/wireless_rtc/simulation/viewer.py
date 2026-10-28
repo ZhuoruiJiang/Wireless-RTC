@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from importlib.resources import files
 import json
 import math
+import socket
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -18,6 +19,17 @@ class Frame:
     state: dict
     rendered_at: float
     render_ms: float
+
+
+class ViewerHTTPServer(ThreadingHTTPServer):
+    # Windows SO_REUSEADDR can route requests to an old viewer even after a
+    # second viewer successfully binds. Require exclusive ownership there.
+    allow_reuse_address = not hasattr(socket,"SO_EXCLUSIVEADDRUSE")
+
+    def server_bind(self):
+        if hasattr(socket,"SO_EXCLUSIVEADDRUSE"):
+            self.socket.setsockopt(socket.SOL_SOCKET,socket.SO_EXCLUSIVEADDRUSE,1)
+        super().server_bind()
 
 
 class SimulationViewer:
@@ -83,7 +95,7 @@ class SimulationViewer:
                 except OSError:
                     pass
 
-        self._server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+        self._server = ViewerHTTPServer(("127.0.0.1", port), Handler)
         self._server.daemon_threads = True
         self._http_thread = threading.Thread(target=self._server.serve_forever, daemon=True)
         self._render_thread = threading.Thread(target=self._render_loop, daemon=True)

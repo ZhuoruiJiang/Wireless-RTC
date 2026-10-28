@@ -227,6 +227,10 @@ through interruptions, and the frame caption identifies its tick. New HTML, CSS,
 and JavaScript assets ship with the Python package; no frontend build or external
 web service is required. Port conflicts produce an actionable command-line error.
 If the experiment fails, the viewer remains open to show the error until Ctrl+C.
+Open the page as soon as the viewer URL is printed to watch the run in progress.
+**Completed** means the experiment has finished: its final image is intentionally
+stationary. Only one viewer may own a port, including on Windows; stop an old
+viewer with Ctrl+C or choose another `--view-port` for a new run.
 Use a fresh output directory on each run. Ctrl+C during a run stops it; partial
 output is not a completed experiment.
 

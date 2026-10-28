@@ -26,6 +26,13 @@ def eventually(predicate, timeout=3):
 
 
 class ViewerTests(unittest.TestCase):
+    def test_port_cannot_silently_route_to_an_older_viewer(self):
+        with SimulationViewer(port=0) as first:
+            with self.assertRaises(OSError):
+                SimulationViewer(port=first.port)
+            with urlopen(f"http://127.0.0.1:{first.port}/api/snapshot",timeout=3) as response:
+                self.assertEqual(json.load(response)["session"],first.snapshot()["session"])
+
     def test_packaged_page_and_assets_are_served(self):
         with SimulationViewer(port=0) as viewer:
             for path,content_type,marker in [("/","text/html",b'<canvas id="scene"'),
