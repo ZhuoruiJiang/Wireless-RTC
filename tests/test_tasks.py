@@ -152,6 +152,14 @@ class TaskTests(unittest.TestCase):
                         self.assertAlmostEqual(condition["average_rtt_ms"],sum(measured)/len(measured))
                         self.assertEqual(condition["rtt_samples"],len(measured))
                         self.assertEqual(condition["average_injected_delay_ms"],0.)
+                        if method == "naive":
+                            self.assertIsNone(condition["prediction_mae_ms"])
+                            self.assertEqual(condition["prediction_samples"],0)
+                        else:
+                            target = "inference_ms" if method == "rtc" else "actual_ms"
+                            expected_mae = sum(abs(float(row["predicted_ms"])-float(row[target]))
+                                               for row in successful)/len(successful)
+                            self.assertAlmostEqual(condition["prediction_mae_ms"],expected_mae)
                         with (root/"run"/"tasks"/task/name/"episodes.csv").open() as f:
                             episode_rows = list(csv.DictReader(f))
                         for episode_row in episode_rows:
@@ -164,6 +172,10 @@ class TaskTests(unittest.TestCase):
                 for row, overall in zip(csv_summary, summary["overall"]):
                     self.assertEqual(float(row["average_rtt_ms"]),overall["average_rtt_ms"])
                     self.assertEqual(float(row["average_injected_delay_ms"]),0.)
+                    if row["method"] == "naive":
+                        self.assertEqual(row["prediction_mae_ms"],"")
+                    else:
+                        self.assertEqual(float(row["prediction_mae_ms"]),overall["prediction_mae_ms"])
             finally:
                 server.shutdown(); server.server_close(); thread.join(timeout=3)
 

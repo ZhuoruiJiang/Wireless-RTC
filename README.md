@@ -352,6 +352,18 @@ failed or timed-out requests. Missing measurements produce JSON `null` (blank CS
 and zero samples; disabled injection produces a measured mean of zero. Unlike
 latency, the solve-rate average still gives each selected task equal weight.
 
+The same reports include `prediction_mae_ms`, the mean absolute difference between
+the submitted `predicted_ms` and its observed target: server `inference_ms` for
+`rtc`, or total `actual_ms` RTT for `wireless_rtc`. `rtt_prediction_mae_ms` scores
+both predictions against total RTT, providing a common response-delay target.
+`prediction_samples` and `rtt_prediction_samples` give the respective counts.
+MAE is in milliseconds and uses successful inference requests, including initial
+predictions, expired chunks, and requests drained after the episode. There is no
+extra warmup exclusion. It is pooled by scored request count across episodes and
+tasks. `naive` has JSON `null` (blank CSV) for both losses and zero scored samples.
+The native-target MAEs for `rtc` and `wireless_rtc` measure different quantities;
+use the RTT-target MAE when comparing response-delay prediction errors.
+
 Combined summaries are written only after every selected task finishes. Interrupted
 or failed runs retain their logs and manifest status without publishing a partial
 cross-task average. The manifest records each task's level hash, checkpoint hash,

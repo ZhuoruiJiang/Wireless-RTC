@@ -53,6 +53,11 @@ class LiveTests(unittest.TestCase):
             self.assertAlmostEqual(result[average],sum(row[raw] for row in successful)/len(successful))
         self.assertEqual(result["average_injected_delay_ms"],3.)
         self.assertGreater(result["average_delay_sleep_ms"],0.)
+        self.assertAlmostEqual(result["prediction_mae_ms"],
+                               sum(abs(row["predicted_ms"]-row["inference_ms"]) for row in successful)/len(successful))
+        self.assertAlmostEqual(result["rtt_prediction_mae_ms"],
+                               sum(abs(row["predicted_ms"]-row["actual_ms"]) for row in successful)/len(successful))
+        self.assertEqual(result["prediction_samples"],len(successful))
 
     def test_rtt_uses_high_resolution_clock(self):
         with connection(FakePolicy(delay=.003)) as client, patch("time.monotonic",return_value=1000.):
