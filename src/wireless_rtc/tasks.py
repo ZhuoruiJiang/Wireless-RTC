@@ -1,9 +1,15 @@
 """Named benchmark tasks and their matching upstream checkpoints."""
+import hashlib
 from pathlib import Path
 
 
 TASKS = {name:f"worlds/l/{name}.json" for name in (
     "grasp_easy", "cartpole_thrust", "catcher_v3", "hard_lunar_lander", "mjc_walker")}
+
+
+def level_sha256(path):
+    """Ignore Git's Windows CRLF conversion while detecting level changes."""
+    return hashlib.sha256(Path(path).read_bytes().replace(b"\r\n",b"\n")).hexdigest()
 
 
 def selected_tasks(config):

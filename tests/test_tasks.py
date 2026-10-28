@@ -14,7 +14,7 @@ from wireless_rtc.client.live import run_remote
 from wireless_rtc.control_modes import CONTROL_MODES,PROTOCOL_VERSION
 from wireless_rtc.server.policies import PolicyRegistry
 from wireless_rtc.server.service import make_server
-from wireless_rtc.tasks import TASKS,selected_tasks,task_checkpoint
+from wireless_rtc.tasks import TASKS,selected_tasks,task_checkpoint,level_sha256
 
 
 class Array:
@@ -67,6 +67,17 @@ class Policy:
 
 
 class TaskTests(unittest.TestCase):
+    def test_level_hash_matches_across_windows_and_linux(self):
+        original = b'{\n  "env_state": {"position": [1, 2]}\n}\n'
+        with tempfile.TemporaryDirectory() as temp:
+            linux,windows = Path(temp)/"linux.json",Path(temp)/"windows.json"
+            linux.write_bytes(original)
+            windows.write_bytes(original.replace(b"\n",b"\r\n"))
+            self.assertEqual(level_sha256(linux),level_sha256(windows))
+            self.assertEqual(level_sha256(windows),hashlib.sha256(original).hexdigest())
+            windows.write_bytes(original.replace(b'"env_state"',b'"changed_state"',1))
+            self.assertNotEqual(level_sha256(linux),level_sha256(windows))
+
     def test_task_config_validation_and_legacy_level(self):
         self.assertEqual(selected_tasks({"level":TASKS["grasp_easy"]})[0]["name"],"grasp_easy")
         self.assertEqual(len(selected_tasks({"tasks":list(TASKS)})),5)
@@ -150,6 +161,28 @@ class TaskTests(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError,"missing tasks"):
                         run_remote(config,"127.0.0.1",server.server_address[1],Path(temp)/"run",{})
                     simulator.assert_not_called()
+                self.assertFalse((Path(temp)/"run"/"summary.json").exists())
+            finally:
+                server.shutdown(); server.server_close(); thread.join(timeout=3)
+
+    def test_compatibility_error_records_differing_fields(self):
+        with tempfile.TemporaryDirectory() as temp:
+            task_checkpoint(temp,"grasp_easy").write_bytes(b"test")
+            server = make_server("127.0.0.1",0,PolicyRegistry(temp,Policy))
+            thread = threading.Thread(target=server.serve_forever,daemon=True)
+            thread.start()
+            config = json.loads(Path("configs/rtc_remote.json").read_text())
+            config["tasks"] = ["grasp_easy"]
+            simulator = Simulator(TASKS["grasp_easy"],42)
+            simulator.level_sha256 = "changed-level"
+            try:
+                with patch("wireless_rtc.simulation.kinetix.KinetixSimulator",return_value=simulator):
+                    with self.assertRaisesRegex(ValueError,"level_sha256.*changed-level"):
+                        run_remote(config,"127.0.0.1",server.server_address[1],Path(temp)/"run",{})
+                manifest = json.loads((Path(temp)/"run"/"manifest.json").read_text())
+                mismatches = manifest["tasks"]["grasp_easy"]["compatibility_mismatches"]
+                self.assertEqual(mismatches["level_sha256"]["client"],"changed-level")
+                self.assertEqual(manifest["tasks"]["grasp_easy"]["status"],"error")
                 self.assertFalse((Path(temp)/"run"/"summary.json").exists())
             finally:
                 server.shutdown(); server.server_close(); thread.join(timeout=3)

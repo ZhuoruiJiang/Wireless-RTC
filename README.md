@@ -341,6 +341,11 @@ devices, and completion status. Older remote configs with only `level` still sel
 that single task; `tasks` takes precedence when present. The offline `rtc` command
 continues to use one `level` and one `--checkpoint`.
 
+Level hashes normalize Windows CRLF line endings to LF before comparison, so
+Git's platform-specific checkout conversion does not reject identical levels.
+Checkpoint hashes continue to cover the original binary bytes. Compatibility
+errors name each differing field and retain both values in the manifest.
+
 To exercise all five actual policies in a short CPU smoke test, download the
 checkpoints as shown below, set `RTC_TASK_CHECKPOINT_DIR=checkpoints/24/policies`,
 then run the unit-test command. This optional test caps each episode at eight

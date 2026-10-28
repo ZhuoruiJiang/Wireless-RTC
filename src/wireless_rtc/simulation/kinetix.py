@@ -15,6 +15,7 @@ import time
 from wireless_rtc.client.schedule import delay_steps, execute_interval
 from wireless_rtc.network.delays import generate_delays
 from wireless_rtc.prediction.rolling import make_predictor
+from wireless_rtc.tasks import level_sha256
 from wireless_rtc.control_modes import CONTROL_MODES, PROTOCOL_VERSION, condition_name, predictors_for, predictor_sample
 
 
@@ -47,7 +48,7 @@ class KinetixSimulator:
         self.jax, self.jnp, self.np = jax, jnp, np
         jax, jnp = self.jax, self.jnp
         self.level_name = level
-        self.level_sha256 = hashlib.sha256((UPSTREAM / level).read_bytes()).hexdigest()
+        self.level_sha256 = level_sha256(UPSTREAM / level)
         self.level, static, self.params = saving.load_from_json_file(str(UPSTREAM / level))
         self.static = static.replace(screen_dim=(512,512))
         self.env = kenv.make_kinetix_env_from_name(

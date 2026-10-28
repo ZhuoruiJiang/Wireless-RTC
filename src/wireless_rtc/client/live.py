@@ -250,9 +250,14 @@ def run_remote(config, host, port, output, metadata, timeout=120, viewer=None):
                 sim = KinetixSimulator(spec["level"],config["seed"])
                 jax,jnp,np = sim.jax,sim.jnp,sim.np
                 selected,_ = client.request("select_task",task=task)
-                if (selected.get("task") != task or selected.get("level_sha256") != sim.level_sha256
-                        or selected.get("observation_dim") != sim.observation_dim or selected.get("action_dim") != sim.action_dim):
-                    raise ValueError(f"Client simulator and policy server are incompatible for {task}")
+                expected = dict(task=task,level_sha256=sim.level_sha256,
+                                observation_dim=sim.observation_dim,action_dim=sim.action_dim)
+                mismatches = {field:dict(client=value,server=selected.get(field))
+                              for field,value in expected.items() if selected.get(field) != value}
+                if mismatches:
+                    metadata["tasks"][task] = dict(level=spec["level"],server=selected,status="error",
+                                                 compatibility_mismatches=mismatches)
+                    raise ValueError(f"Client simulator and policy server are incompatible for {task}: {json.dumps(mismatches)}")
                 horizon = selected["horizon"]
                 if type(horizon) is not int or not 1 <= config["min_execution_steps"] < horizon:
                     raise ValueError("Require 1 <= min_execution_steps < policy horizon")
