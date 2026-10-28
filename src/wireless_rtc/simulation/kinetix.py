@@ -15,6 +15,7 @@ import time
 from wireless_rtc.client.schedule import delay_steps, execute_interval
 from wireless_rtc.network.delays import generate_delays
 from wireless_rtc.prediction.rolling import make_predictor
+from wireless_rtc.control_modes import CONTROL_MODES, PROTOCOL_VERSION, condition_name, predictors_for, predictor_sample
 
 
 UPSTREAM = Path(__file__).resolve().parents[3] / "vendor" / "rtc-kinetix"
@@ -93,7 +94,7 @@ class KinetixPolicy(KinetixSimulator):
         return key
 
     def describe(self):
-        return dict(protocol_version=1, horizon=self.horizon, action_dim=self.action_dim,
+        return dict(protocol_version=PROTOCOL_VERSION, control_modes=CONTROL_MODES.copy(), horizon=self.horizon, action_dim=self.action_dim,
                     observation_dim=self.observation_dim, level=self.level_name,
                     level_sha256=self.level_sha256, checkpoint_sha256=self.checkpoint_sha256,
                     parameters=self.parameter_count, jax_version=self.jax.__version__,
@@ -111,13 +112,22 @@ class KinetixPolicy(KinetixSimulator):
         if type(seed) is not int or not 0 <= seed < 2**32:
             raise ValueError("Invalid episode seed")
         key = self.jax.random.key(seed)
-        previous = self.jnp.zeros((1,self.horizon,self.action_dim))
-        # Compile on this observation shape before the client's episode clock starts.
-        self.guided(key,obs[None],previous,0,self.horizon).block_until_ready()
+        calibration_ms = self.calibrate(obs)
+        self.plain(key,obs[None]).block_until_ready()
         self.rng = key
         chunk = self.plain(self.next_key(),obs[None])[0]
         chunk.block_until_ready()
-        return dict(actions=self.np.asarray(chunk).tolist(), observation_tick=0)
+        return dict(actions=self.np.asarray(chunk).tolist(), observation_tick=0,
+                    calibration_inference_ms=calibration_ms)
+
+    def calibrate(self, obs):
+        """A causal warmed guided-inference measurement, before episode execution."""
+        key = self.jax.random.key(0)
+        previous = self.jnp.zeros((1,self.horizon,self.action_dim))
+        self.guided(key,obs[None],previous,0,self.horizon).block_until_ready()
+        start = time.perf_counter()
+        self.guided(key,obs[None],previous,0,self.horizon).block_until_ready()
+        return (time.perf_counter()-start)*1000
 
     def infer(self, request):
         jnp, np = self.jnp, self.np
@@ -129,10 +139,10 @@ class KinetixPolicy(KinetixSimulator):
         if (previous.shape != (self.horizon,self.action_dim) or not np.isfinite(previous).all()
                 or type(d) is not int or type(end) is not int or type(tick) is not int or tick < 0):
             raise ValueError("Invalid action shape, values, or scheduling fields")
-        if not 0 <= d <= end <= self.horizon or method not in {"rtc", "naive"}:
+        if not 0 <= d <= end <= self.horizon or method not in CONTROL_MODES:
             raise ValueError("Invalid method or prefix/overlap bounds")
         start = time.perf_counter()
-        if method == "rtc":
+        if method in {"rtc","wireless_rtc"}:
             chunk = self.guided(self.next_key(),obs[None],jnp.asarray(previous)[None],d,end)[0]
         else:
             chunk = self.plain(self.next_key(),obs[None])[0]
@@ -162,17 +172,18 @@ def run_experiment(config, checkpoint, output, metadata, viewer=None, view_pace=
                     config=config)
     metadata["viewer"] = dict(enabled=viewer is not None, paced=view_pace,
                               fps=viewer.fps if viewer is not None else None)
+    metadata["control_modes"] = CONTROL_MODES.copy()
     (output/"manifest.json").write_text(json.dumps(metadata,indent=2),encoding="utf-8")
     summaries = []
-    for method in config.get("methods",["rtc","naive"]):
-        if method not in {"rtc","naive"}:
+    for method in config.get("methods",list(CONTROL_MODES)):
+        if method not in CONTROL_MODES:
             raise ValueError("Unknown control method")
-        for predictor_name,predictor_config in config["predictors"].items():
+        for predictor_name,predictor_config in predictors_for(method,config):
             # Reset policy/environment randomness for each method/predictor.
             backend.rng = jax.random.key(config["seed"])
             request_rows, episodes = [], []
             for episode in range(config["episodes"]):
-                predictor = make_predictor(predictor_config)
+                predictor = make_predictor(predictor_config) if predictor_config is not None else None
                 backend.rng = jax.random.fold_in(jax.random.key(config["seed"]),episode)
                 # Same exogenous trace per episode across methods. No current-target leakage.
                 delays = generate_delays(config["delay"], int(backend.params.max_timesteps)+1,
@@ -180,19 +191,23 @@ def run_experiment(config, checkpoint, output, metadata, viewer=None, view_pace=
                 env_key = jax.random.fold_in(jax.random.key(config["seed"]),episode)
                 env_key,reset_key = jax.random.split(env_key)
                 obs,state = backend.reset(reset_key)
+                calibration_ms = backend.calibrate(obs)
+                if method == "rtc":
+                    predictor.update(calibration_ms)
                 previous = np.asarray(backend.plain(backend.next_key(),obs[None])[0])
                 valid, tick, solved, exhausted_total = H, 0, False, 0
                 if viewer is not None:
                     viewer.update(state, phase="Running", method=method, predictor=predictor_name,
                                   episode=episode+1, episodes=config["episodes"], tick=0,
-                                  simulation_ms=0, success=False)
+                                  simulation_ms=0, success=False,predictor_basis=CONTROL_MODES[method],
+                                  predicted_ms=None,inference_ms=None)
                 for request_index,actual_ms in enumerate(delays):
-                    prediction_ms = predictor.predict()
-                    raw_d = delay_steps(prediction_ms,config["control_ms"])
+                    prediction_ms = predictor.predict() if predictor is not None else None
+                    raw_d = delay_steps(prediction_ms,config["control_ms"]) if prediction_ms is not None else 0
                     d = min(raw_d,valid)  # log unsupported predicted prefix, do not hide it
                     key = backend.next_key()
                     start = time.perf_counter()
-                    if method == "rtc":
+                    if method in {"rtc","wireless_rtc"}:
                         new = backend.guided(key,obs[None],jnp.asarray(previous)[None],d,valid)[0]
                     else:
                         new = backend.plain(key,obs[None])[0]
@@ -217,7 +232,8 @@ def run_experiment(config, checkpoint, output, metadata, viewer=None, view_pace=
                         if viewer is not None:
                             viewer.update(state, phase="Running", tick=tick,
                                           simulation_ms=tick*config["control_ms"], success=solved,
-                                          predicted_ms=prediction_ms, actual_ms=actual_ms)
+                                          predicted_ms=prediction_ms, actual_ms=actual_ms,
+                                          inference_ms=inference_ms,predictor_basis=CONTROL_MODES[method])
                         if view_pace:
                             time.sleep(max(0,config["control_ms"]/1000 - (time.monotonic()-step_started)))
                         if bool(done):
@@ -230,16 +246,20 @@ def run_experiment(config, checkpoint, output, metadata, viewer=None, view_pace=
                         predicted_steps=raw_d,applied_prefix_steps=d,overlap_steps=valid,
                         prefix_clipped=raw_d>valid,execution_steps=elapsed,
                         executed_steps=executed,buffer_exhaustion_steps=exhausted,
-                        prediction_exceeded=actual_d>raw_d,stale_response=actual_d>=H,
+                        predictor_basis=CONTROL_MODES[method],
+                        predictor_observation_ms=predictor_sample(method,inference_ms,actual_ms),
+                        prediction_exceeded=actual_d>raw_d if predictor is not None else None,stale_response=actual_d>=H,
                         host_inference_ms=inference_ms))
-                    predictor.update(actual_ms)
+                    if predictor is not None:
+                        predictor.update(predictor_sample(method,inference_ms,actual_ms))
                     valid = max(0,H-elapsed)
                     previous = np.concatenate([new[elapsed:],np.zeros((min(elapsed,H),backend.action_dim))])
                     if bool(done) or tick >= int(backend.params.max_timesteps):
                         break
                 episodes.append(dict(episode=episode,success=solved,steps=tick,
-                                     buffer_exhaustion_steps=exhausted_total))
-            directory = output/f"{method}-{predictor_name}"
+                                     buffer_exhaustion_steps=exhausted_total,
+                                     calibration_inference_ms=calibration_ms if method == "rtc" else None))
+            directory = output/condition_name(method,predictor_name)
             directory.mkdir()
             for filename,rows in [("requests.csv",request_rows),("episodes.csv",episodes)]:
                 with (directory/filename).open("w",newline="",encoding="utf-8") as f:
@@ -249,8 +269,9 @@ def run_experiment(config, checkpoint, output, metadata, viewer=None, view_pace=
             summary=dict(method=method,predictor=predictor_name,episodes=len(episodes),
                          solve_rate=sum(r["success"] for r in episodes)/len(episodes),
                          requests=len(request_rows),
-                         prediction_exceedance_rate=sum(r["prediction_exceeded"] for r in request_rows)/len(request_rows),
-                         clipped_prefix_rate=sum(r["prefix_clipped"] for r in request_rows)/len(request_rows),
+                         predictor_basis=CONTROL_MODES[method],
+                         prediction_exceedance_rate=sum(r["prediction_exceeded"] for r in request_rows)/len(request_rows) if method != "naive" else None,
+                         clipped_prefix_rate=sum(r["prefix_clipped"] for r in request_rows)/len(request_rows) if method != "naive" else None,
                          buffer_exhaustion_steps=sum(r["buffer_exhaustion_steps"] for r in episodes))
             summaries.append(summary)
             print(json.dumps(summary),flush=True)

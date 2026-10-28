@@ -23,12 +23,16 @@
     text("phase", state.phase || "Waiting for simulation");
     text("method", state.method || "—");
     text("predictor", state.predictor || "—");
+    text("basis", ({inference_ms:"Inference only",response_rtt_ms:"Total response",none:"None"})[state.predictor_basis] || "—");
     text("episode", state.episode == null ? "—" : `${state.episode} / ${state.episodes || "?"}`);
     text("tick", state.tick ?? "—");
     text("sim-time", number(state.simulation_ms) ? `${(state.simulation_ms / 1000).toFixed(2)} s` : "—");
     text("success", state.success == null ? "—" : state.success ? "Yes" : "No");
     text("prediction", milliseconds(state.predicted_ms));
+    text("prediction-label", state.predictor_basis === "inference_ms" ? "Inference budget" : "Response budget");
     text("actual", milliseconds(state.actual_ms));
+    element("inference-row").hidden = !number(state.inference_ms);
+    text("inference",milliseconds(state.inference_ms));
     element("injection-row").hidden = !number(state.injected_delay_ms);
     text("injection", milliseconds(state.injected_delay_ms));
     element("exhaustion-row").hidden = !number(state.buffer_exhaustion_steps);

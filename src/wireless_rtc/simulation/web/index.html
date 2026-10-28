@@ -13,10 +13,11 @@
 <p class="hint">Pausing the view does not pause the experiment.</p></div>
 <aside><section class="panel"><p class="eyebrow">EXPERIMENT</p><h2 id="phase">Waiting for simulation</h2>
 <dl><div><dt>Method</dt><dd id="method">—</dd></div><div><dt>Predictor</dt><dd id="predictor">—</dd></div>
+<div><dt>Guidance source</dt><dd id="basis">—</dd></div>
 <div><dt>Episode</dt><dd id="episode">—</dd></div><div><dt>Simulation tick</dt><dd id="tick">—</dd></div>
 <div><dt>Simulation time</dt><dd id="sim-time">—</dd></div><div><dt>Success</dt><dd id="success">—</dd></div>
 <div id="exhaustion-row" hidden><dt>Buffer empty steps</dt><dd id="exhaustion">—</dd></div></dl></section>
-<section class="panel"><p class="eyebrow">RESPONSE DELAY</p><div class="delays"><div><span>Predicted</span><strong id="prediction">—</strong></div><div><span id="delay-label">Measured RTT</span><strong id="actual">—</strong></div><div id="injection-row" hidden><span>Injected wait</span><strong id="injection">—</strong></div></div></section>
+<section class="panel"><p class="eyebrow">RESPONSE DELAY</p><div class="delays"><div><span id="prediction-label">Guidance budget</span><strong id="prediction">—</strong></div><div><span id="delay-label">Measured RTT</span><strong id="actual">—</strong></div><div id="inference-row" hidden><span>Inference time</span><strong id="inference">—</strong></div><div id="injection-row" hidden><span>Injected wait</span><strong id="injection">—</strong></div></div></section>
 <section id="notice" class="notice" role="alert" hidden></section><button id="retry" class="retry" type="button">Reconnect now</button>
 <p class="hint">Frames stay on the simulator machine. Viewing adds rendering overhead; disable it for timing measurements.</p></aside></section>
 <noscript>This viewer requires JavaScript to display simulation frames.</noscript>

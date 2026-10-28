@@ -39,6 +39,13 @@ the original radio conditions. Never report synthetic stress as measured WiFi.
 
 ## Predictor progression
 
+Compare `rtc` (completed inference timings), `wireless_rtc` (total response
+latency), and `naive` (no guidance). All modes experience the full network delay.
+The two RTC modes differ in their delay feedback source; injected sequences reset
+from equal episode seeds. The inference-only baseline starts with a warmed server
+calibration, never a future request's outcome. Logs record `predictor_basis` and
+`predictor_observation_ms` to make the comparison auditable.
+
 Keep last value, recent max and rolling p95 as baselines. First try a rolling
 quantile with a modest tuned safety margin, an exponentially weighted location/
 variation estimate, and a fast-increase/slow-decrease upper estimate. Assess tail

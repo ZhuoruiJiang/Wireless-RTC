@@ -4,7 +4,7 @@ Question: does a causal delay estimate preserve RTC performance under variable r
 No learned predictor or telemetry feature tuning is part of this stage.
 
 1. Check prediction on fixed, IID uniform, and correlated bursty synthetic traces.
-2. Check actual pretrained RTC and naive async execution on grasp_easy, using fixed
+2. Compare plain policy, inference-only RTC, and network-aware RTC on grasp_easy, using fixed
    and IID random injected delays. Five episodes are a smoke test, not a success-rate
    estimate suitable for drawing scientific conclusions.
 3. Measure real RTT to Cybertron with the probe service, repeat across WiFi sessions.
@@ -45,8 +45,20 @@ drained after an episode ends are logged but never applied or fed to its predict
 
 The clock starts after physics/policy warmup and an initial plain chunk. Server RNG
 and predictor history reset each episode. In-flight requests are drained before
-starting a new episode. Both RTC and naive use the same controller; the server
-selects guided or plain inference. Real network conditions differ between runs.
+starting a new episode. All three modes use the same controller. `naive` uses
+plain inference without a predictor. `rtc` and `wireless_rtc` use guided inference,
+with feedback from past server inference timings and total RTTs, respectively.
+A warmed guided-inference measurement initializes `rtc` before the episode and
+is recorded in episode logs. Real network conditions differ between runs.
+
+New manifests map mode names to predictor inputs. Results from before the
+three-mode protocol used `rtc` for what is now called `wireless_rtc`. Compare
+labels across versions only after examining manifests and software revisions.
+
+Offline `rtc` uses host inference duration as predictor feedback; `wireless_rtc`
+uses injected whole-response delay. Host compute time is not added to the logical
+delay. Logs distinguish the predictor target from the actual response delay.
+`naive` is run once per comparison, without meaningful prediction scores.
 
 RTT is measured from request submission through response validation on the client.
 It includes local worker dispatch/serialization, transport, policy inference and

@@ -10,8 +10,9 @@
     "high_ms": 200
   },
   "methods": [
+    "naive",
     "rtc",
-    "naive"
+    "wireless_rtc"
   ],
   "predictors": {
     "recent_max": {

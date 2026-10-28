@@ -75,6 +75,21 @@ Open `comparison.csv` and each `prediction.svg` under the output folder.
 Each source has 1,000 requests; 32 are warmup. Configurations are fixed in advance.
 Use a new output directory each run.
 
+### Reuse the same run command
+
+Use `--tag` instead of an exact `--output` path. Each invocation creates a new
+folder containing the tag and a microsecond-resolution UTC timestamp:
+
+```powershell
+uv run --no-sync python -m wireless_rtc rtc-live --config configs/rtc_remote.json --tag campus --view --view-port 18082
+```
+
+The name is `runs/campus-YYYYMMDD-HHMMSS-ffffffZ/`; `Z` denotes UTC. The destination
+is printed when starting. Omit both options to use the command name as the tag.
+`--output-root` changes the parent folder. These options work for simulations,
+probes, prediction suites, and trace evaluation. Explicit `--output` retains its
+original exact-directory behavior and refuses overwrites.
+
 ## Set up a laptop for live simulation
 
 Complete the quick-start `.venv` setup above. These additional commands work from
@@ -185,8 +200,9 @@ it does not replace the policy with a toy controller.
 Predicted delay and injected actual delay are independent.
 Output includes per-request timings/alignment, per-episode success, checkpoint hash,
 parameter count, configuration, software revision, and JAX device.
-The first inference includes JIT compilation; `host_inference_ms` is diagnostic,
-not a warmed-up inference benchmark.
+Guided inference is warmed before each episode; `host_inference_ms` records the
+actual host inference duration. The inference-only baseline is initialized with
+a causal warmed calibration measurement, recorded in `episodes.csv`.
 Five episodes per condition are only a functional smoke test.
 
 ### Watch a run in your browser
@@ -269,6 +285,30 @@ Only load trusted pickle checkpoints. Checkpoints and large logs are gitignored.
 
 ## Live client simulation with server policy inference
 
+### Three control modes
+
+The `methods` list selects algorithms independently of the `rtc` (offline) or
+`rtc-live` (remote) command:
+
+| Config label | Guidance | Predictor feedback |
+|---|---|---|
+| `naive` | Plain policy, no delay/prefix guidance | None |
+| `rtc` | Vanilla RTC with previous-action guidance | Completed server `inference_ms` only |
+| `wireless_rtc` | Network-aware RTC with previous-action guidance | Completed total request RTT |
+
+All modes experience the full response latency, use the same action alignment,
+and keep physics running while waiting. Server-injected waits are excluded from
+the `rtc` predictor's feedback but remain part of its actual response latency.
+Both RTC modes use the configured history-based algorithms. `naive` runs once
+per comparison because its behavior is independent of those algorithms.
+Default configs enable all three modes. With two predictors this produces five
+conditions: `naive/`, two `rtc-PREDICTOR/`, and two `wireless_rtc-PREDICTOR/`.
+
+**Label migration:** older results named `rtc` used total RTT, corresponding to
+the new `wireless_rtc`. Historical results are not rewritten. New manifests
+record the mapping explicitly. Update **both machines** and restart the policy
+server: protocol v2 checks prevent silently using the old label meanings.
+
 The **laptop** owns Kinetix physics, delay prediction, action buffering, and the
 browser viewer. The **server** owns the pretrained policy and checkpoint.
 Only observations/action chunks cross the network; video frames stay on the laptop.
@@ -296,22 +336,24 @@ server; do not reinstall the CPU requirements there.
 
    ```powershell
    $env:JAX_PLATFORMS = "cpu"
-   uv run --no-sync python -m wireless_rtc rtc-live --config configs/rtc_remote.json --host 127.0.0.1 --port 8765 --output runs/rtc-live-001 --view
+   uv run --no-sync python -m wireless_rtc rtc-live --config configs/rtc_remote.json --host 127.0.0.1 --port 8765 --tag campus --view
    ```
 
    Open <http://localhost:8080>. There is **no viewer-port SSH tunnel**. After the
-   run completes, the local viewer keeps its final frame until Ctrl+C. Use a fresh
-   output directory for each run. `--view-port` and `--view-fps` work as in `rtc`.
+   run completes, the local viewer keeps its final frame until Ctrl+C. Tagged runs
+   get fresh folders automatically. `--view-port` and `--view-fps` work as in `rtc`.
    Omit `--view` for timing measurements.
 
 `rtc-live` is always paced; it has no `--view-pace` flag. The new remote config
-starts with five episodes per condition, RTC/naive methods, and recent-max/p95
+starts with five episodes per condition, all three modes, and recent-max/p95
 predictors. It deliberately has no `delay` section. Your offline fixed/random
 configs retain their injected delays and are rejected by the live command.
 
 Before each episode the client warms its physics code, the server warms inference
 and resets the policy RNG, and an initial plain-policy action chunk is fetched.
-This setup is outside the episode clock and predictor history. Thereafter, one
+This setup is outside the episode clock. `rtc` seeds its history with a warmed
+guided-inference calibration. `wireless_rtc` starts from configured `initial_ms`
+and does not learn startup/JIT latency. Thereafter, one
 background worker sends policy requests while the main thread keeps executing
 physics at the configured control interval. A response is considered only at a
 controller boundary. The client drops the elapsed prefix, rejects expired chunks,
@@ -327,7 +369,11 @@ activation age (`elapsed_ticks`), discarded responses, and failures. RTT include
 worker dispatch, serialization, transport, inference, decoding, and validation;
 it excludes initial connection establishment and episode warmup. The predictor
 updates only after a successful response is observed during the episode, including
-expired chunks, and resets each episode. Failed/censored delays never update it.
+expired chunks, and resets each episode. `predictor_basis` identifies its input;
+`predictor_observation_ms` records the completed inference time or total RTT used
+as feedback. `actual_ms` always means total RTT. `budget_exceeded` compares the
+guidance allowance to the real response latency in both RTC modes. Failed or
+censored delays never update a predictor. Naive predictions are blank.
 
 `ideal_delay_steps` is `ceil(RTT/control_ms)`. Actual chunk alignment uses simulation
 ticks, which may differ when local physics/rendering is slow. `ticks.csv` records
@@ -367,8 +413,9 @@ Actual network delays and request counts can still differ between conditions.
 The manifest saves the distribution settings under `server.response_delay`.
 Request logs separate `injected_delay_ms` (sampled/clipped target), `delay_sleep_ms`
 (actual server waiting), `inference_ms`, `server_ms` (including waiting), and
-`actual_ms` (total measured request latency). The predictor sees only completed
-request RTTs, never the next injected sample. The viewer shows the last observed
+`actual_ms` (total measured request latency). `wireless_rtc` learns completed RTTs;
+`rtc` learns completed inference times. Neither receives the next injected sample.
+The viewer shows the last observed
 injected wait and cumulative buffer-empty steps. Live client intervals use the
 high-resolution `perf_counter` clock, avoiding Windows' coarse monotonic tick
 quantization on Python 3.11.

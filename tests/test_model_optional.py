@@ -25,7 +25,7 @@ class PretrainedTests(unittest.TestCase):
         self.assertFalse(hasattr(simulator,"policy"))
         simulator.params = simulator.params.replace(max_timesteps=8)
         config = json.loads(Path("configs/rtc_remote.json").read_text())
-        config.update(episodes=1,methods=["rtc","naive"],
+        config.update(episodes=1,methods=["naive","rtc","wireless_rtc"],
                       predictors={"recent_max": config["predictors"]["recent_max"]})
         server = make_server("127.0.0.1",0,policy,
                              response_delay=NormalResponseDelay(mean_ms=25,std_ms=5,max_ms=100))
@@ -42,12 +42,14 @@ class PretrainedTests(unittest.TestCase):
                 self.assertEqual(manifest["server"]["response_delay"]["kind"],"clipped_normal")
                 self.assertTrue(viewer.status()["phase"].startswith("Completed"))
                 for method in config["methods"]:
-                    directory = root/f"{method}-recent_max"
+                    directory = root/("naive" if method == "naive" else f"{method}-recent_max")
                     with (directory/"requests.csv").open() as f:
                         rows = list(csv.DictReader(f))
                     self.assertTrue(rows)
                     self.assertTrue(all(r["status"] == "ok" and float(r["actual_ms"]) > 0 for r in rows))
                     self.assertTrue(all(float(r["injected_delay_ms"]) > 0 for r in rows))
+                    expected_basis = {"naive":"none","rtc":"inference_ms","wireless_rtc":"response_rtt_ms"}[method]
+                    self.assertTrue(all(r["predictor_basis"] == expected_basis for r in rows))
                     with (directory/"ticks.csv").open() as f:
                         self.assertEqual(len(list(csv.DictReader(f))),8)
         finally:
@@ -85,7 +87,7 @@ class PretrainedTests(unittest.TestCase):
         # Eight real physics steps and two policy requests, with the actual scheduler.
         backend.params = backend.params.replace(max_timesteps=8)
         config = json.loads(Path("configs/rtc_fixed.json").read_text())
-        config.update(episodes=1, methods=["rtc"])
+        config.update(episodes=1, methods=["wireless_rtc"])
         with tempfile.TemporaryDirectory() as temp, patch(
                 "wireless_rtc.simulation.kinetix.KinetixPolicy", return_value=backend):
             root = Path(temp)
@@ -104,7 +106,7 @@ class PretrainedTests(unittest.TestCase):
             for filename in ["episodes.csv", "requests.csv"]:
                 conditions = []
                 for directory in ["plain", "view"]:
-                    with (root/directory/"rtc-recent_max"/filename).open() as f:
+                    with (root/directory/"wireless_rtc-recent_max"/filename).open() as f:
                         rows = list(csv.DictReader(f))
                     for row in rows:
                         row.pop("host_inference_ms", None)

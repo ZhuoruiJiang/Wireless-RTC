@@ -9,6 +9,7 @@ import subprocess
 
 from wireless_rtc.analysis.evaluate import evaluate, read_trace, save_evaluation
 from wireless_rtc.network.delays import generate_delays
+from wireless_rtc.run_paths import add_output_arguments, resolve_output
 
 
 def metadata(config):
@@ -26,11 +27,11 @@ def main(argv=None):
     commands = parser.add_subparsers(dest="command", required=True)
     suite = commands.add_parser("prediction-suite", help="Fixed/random/bursty synthetic prediction evaluation")
     suite.add_argument("--config", default="configs/first_run.json")
-    suite.add_argument("--output", required=True)
+    add_output_arguments(suite)
     trace = commands.add_parser("evaluate-trace", help="Causal evaluation on completed RTT measurements")
     trace.add_argument("--trace", required=True)
     trace.add_argument("--config", default="configs/first_run.json")
-    trace.add_argument("--output", required=True)
+    add_output_arguments(trace)
     server = commands.add_parser("serve", help="Probe service; optional pretrained policy backend")
     server.add_argument("--host", default="127.0.0.1")
     server.add_argument("--port", type=int, default=8765)
@@ -44,7 +45,7 @@ def main(argv=None):
     probe = commands.add_parser("probe")
     probe.add_argument("--host", default="127.0.0.1")
     probe.add_argument("--port", type=int, default=8765)
-    probe.add_argument("--output", required=True)
+    add_output_arguments(probe)
     probe.add_argument("--samples", type=int, default=100)
     probe.add_argument("--interval-ms", type=float, default=100)
     probe.add_argument("--payload-bytes", type=int, default=1024)
@@ -53,7 +54,7 @@ def main(argv=None):
     sim = commands.add_parser("rtc", help="Actual pretrained RTC/Kinetix with independently injected delays")
     sim.add_argument("--config", default="configs/rtc_fixed.json")
     sim.add_argument("--checkpoint", required=True)
-    sim.add_argument("--output", required=True)
+    add_output_arguments(sim)
     sim.add_argument("--view", action="store_true", help="Stream simulation frames on a loopback web viewer")
     sim.add_argument("--view-port", type=int, default=8080)
     sim.add_argument("--view-fps", type=float, default=10, help="Maximum rendered frames/second (default: 10)")
@@ -63,12 +64,17 @@ def main(argv=None):
     live.add_argument("--host", default="127.0.0.1")
     live.add_argument("--port", type=int, default=8765)
     live.add_argument("--timeout", type=float, default=120, help="RPC timeout in seconds; includes startup warmup")
-    live.add_argument("--output", required=True)
+    add_output_arguments(live)
     live.add_argument("--view", action="store_true", help="Show simulation on a local browser viewer")
     live.add_argument("--view-port", type=int, default=8080)
     live.add_argument("--view-fps", type=float, default=10)
     live.set_defaults(view_pace=False)
     args = parser.parse_args(argv)
+    if args.command != "serve":
+        try:
+            args.output = str(resolve_output(args))
+        except ValueError as exc:
+            parser.error(str(exc))
     if args.command in {"rtc", "rtc-live"}:
         if args.view_pace and not args.view:
             parser.error("--view-pace requires --view")
@@ -98,6 +104,7 @@ def main(argv=None):
             parser.error("--delay normal requires --checkpoint; probe waits use the probe command's --delay")
         serve(args.host, args.port, policy, response_delay)
     elif args.command == "probe":
+        print(f"Run output: {Path(args.output).resolve()}",flush=True)
         from wireless_rtc.network.probe import run_probe
         source = {"kind":"fixed","value_ms":0 if args.delay == "none" else 40}
         if args.delay == "random":
@@ -106,6 +113,7 @@ def main(argv=None):
                         args.payload_bytes,source,seed=args.seed))
     elif args.command in {"rtc", "rtc-live"}:
         config = json.loads(Path(args.config).read_text(encoding="utf-8"))
+        print(f"Run output: {Path(args.output).resolve()}",flush=True)
         def run(viewer=None):
             if args.command == "rtc":
                 from wireless_rtc.simulation.kinetix import run_experiment
@@ -148,6 +156,7 @@ def main(argv=None):
     else:
         config = json.loads(Path(args.config).read_text(encoding="utf-8"))
         output = Path(args.output)
+        print(f"Run output: {output.resolve()}",flush=True)
         output.mkdir(parents=True, exist_ok=False)
         meta = metadata(config)
         if args.command == "evaluate-trace":
