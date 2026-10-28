@@ -27,8 +27,8 @@ class FakePolicy:
 
 
 @contextmanager
-def connection(policy, timeout=1):
-    server = make_server("127.0.0.1",0,policy)
+def connection(policy, timeout=1, response_delay=None):
+    server = make_server("127.0.0.1",0,policy,response_delay=response_delay)
     thread = threading.Thread(target=server.serve_forever,daemon=True)
     thread.start()
     try:
@@ -39,6 +39,21 @@ def connection(policy, timeout=1):
 
 
 class LiveTests(unittest.TestCase):
+    def test_episode_averages_match_requests_with_injected_wait(self):
+        from wireless_rtc.server.delay import NormalResponseDelay
+        delay = NormalResponseDelay(mean_ms=3,std_ms=0,max_ms=3)
+        with connection(FakePolicy(delay=.002),response_delay=delay) as client:
+            result,_ = self.run_episode(client)
+        successful = [row for row in self.requests if row["status"] == "ok"]
+        self.assertTrue(successful)
+        self.assertEqual(result["rtt_samples"],len(successful))
+        for raw,average in [("actual_ms","average_rtt_ms"),
+                            ("injected_delay_ms","average_injected_delay_ms"),
+                            ("delay_sleep_ms","average_delay_sleep_ms")]:
+            self.assertAlmostEqual(result[average],sum(row[raw] for row in successful)/len(successful))
+        self.assertEqual(result["average_injected_delay_ms"],3.)
+        self.assertGreater(result["average_delay_sleep_ms"],0.)
+
     def test_rtt_uses_high_resolution_clock(self):
         with connection(FakePolicy(delay=.003)) as client, patch("time.monotonic",return_value=1000.):
             result,_ = self.run_episode(client,control_ms=5)
@@ -93,6 +108,8 @@ class LiveTests(unittest.TestCase):
         self.assertEqual(self.requests[0]["status"],"error")
         self.assertNotIn("actual_ms",self.requests[0])
         self.assertIn("tick mismatch",result["error"])
+        self.assertEqual(result["rtt_samples"],0)
+        self.assertIsNone(result["average_rtt_ms"])
 
     def test_timeout_is_censored_and_physics_advances_while_waiting(self):
         with connection(FakePolicy(delay=.08),timeout=.025) as client:
@@ -109,6 +126,8 @@ class LiveTests(unittest.TestCase):
             first_id = self.requests[0]["request_id"]
             self.assertEqual(self.requests[0]["discard_reason"],"episode_ended")
             self.assertIsNone(self.requests[0]["arrival_tick"])
+            self.assertEqual(first["rtt_samples"],1)
+            self.assertEqual(first["average_rtt_ms"],self.requests[0]["actual_ms"])
             second,_ = self.run_episode(client,max_steps=1)
             self.assertGreater(self.requests[0]["request_id"],first_id)
         self.assertEqual(first["status"],"ok")

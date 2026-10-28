@@ -13,6 +13,7 @@ from wireless_rtc.control_modes import (CONTROL_MODES, PROTOCOL_VERSION, conditi
                                         inference_time, predictor_sample, predictors_for)
 from wireless_rtc.tasks import selected_tasks
 from wireless_rtc.analysis.tasks import aggregate_tasks, write_task_summary
+from wireless_rtc.analysis.latency import LatencyStats, combine_latency
 
 
 REQUEST_FIELDS = ["task", "episode", "request_id", "observation_tick", "status", "actual_ms",
@@ -84,6 +85,7 @@ def run_live_episode(client, observation, state, step, initial_actions, predicto
     last_injected_ms = None
     last_inference_ms = None
     completed_requests = stale_requests = 0
+    latency = LatencyStats()
 
     def request(fields):
         # Include serialization, network, inference, decoding and validation in RTT.
@@ -128,6 +130,7 @@ def run_live_episode(client, observation, state, step, initial_actions, predicto
                     row["discard_reason"] = "expired_chunk"
                 else:
                     buffer = ActionBuffer(response["actions"],row["observation_tick"])
+        latency.observe(row)
         write_request(row)
         pending = None
         return failure
@@ -188,7 +191,7 @@ def run_live_episode(client, observation, state, step, initial_actions, predicto
     return dict(episode=episode, status="error" if error else "ok", error=error,
                 success=bool(solved), steps=tick, buffer_exhaustion_steps=exhausted,
                 deadline_overrun_steps=overruns, completed_requests=completed_requests,
-                stale_requests=stale_requests)
+                stale_requests=stale_requests, **latency.summary())
 
 
 def validate_config(config):
@@ -321,7 +324,8 @@ def run_remote(config, host, port, output, metadata, timeout=120, viewer=None):
                                        episodes=len(episodes),successes=sum(e["success"] for e in episodes),
                                        solve_rate=sum(e["success"] for e in episodes)/len(episodes),
                                        buffer_exhaustion_steps=sum(e["buffer_exhaustion_steps"] for e in episodes),
-                                       deadline_overrun_steps=sum(e["deadline_overrun_steps"] for e in episodes))
+                                       deadline_overrun_steps=sum(e["deadline_overrun_steps"] for e in episodes),
+                                       **combine_latency(episodes))
                         summaries.append(summary)
                         task_summaries.append(summary)
                         (directory/"summary.json").write_text(json.dumps(summary,indent=2),encoding="utf-8")

@@ -1,6 +1,7 @@
 """Per-task reporting and equal-weight task averages for each control condition."""
 import csv
 import json
+from wireless_rtc.analysis.latency import LATENCY_METRICS, combine_latency
 
 
 def aggregate_tasks(rows, tasks, conditions):
@@ -22,8 +23,10 @@ def aggregate_tasks(rows, tasks, conditions):
                             tasks=len(tasks),episodes=sum(row["episodes"] for row in selected),
                             average_solve_rate=sum(scores.values())/len(tasks),task_solve_rates=scores,
                             buffer_exhaustion_steps=sum(row["buffer_exhaustion_steps"] for row in selected),
-                            deadline_overrun_steps=sum(row["deadline_overrun_steps"] for row in selected)))
+                            deadline_overrun_steps=sum(row["deadline_overrun_steps"] for row in selected),
+                            **combine_latency(selected)))
     return dict(schema_version=2,aggregation="equal_weight_mean_of_selected_task_solve_rates",
+                latency_aggregation="successful_request_weighted",
                 selected_tasks=list(tasks),per_task=rows,overall=overall)
 
 
@@ -34,9 +37,12 @@ def write_task_summary(output, summary):
         writer.writeheader()
         writer.writerows(summary["per_task"])
     with (output/"summary.csv").open("w",newline="",encoding="utf-8") as f:
-        fields = ["method","predictor","average_solve_rate",*summary["selected_tasks"]]
+        latency_fields = [field for name, (_, average) in LATENCY_METRICS.items()
+                          for field in (average, f"{name}_samples")]
+        fields = ["method","predictor","average_solve_rate",*latency_fields,*summary["selected_tasks"]]
         writer = csv.DictWriter(f,fieldnames=fields)
         writer.writeheader()
         for row in summary["overall"]:
             writer.writerow(dict(method=row["method"],predictor=row["predictor"],
-                                 average_solve_rate=row["average_solve_rate"],**row["task_solve_rates"]))
+                                 average_solve_rate=row["average_solve_rate"],
+                                 **{field:row[field] for field in latency_fields},**row["task_solve_rates"]))

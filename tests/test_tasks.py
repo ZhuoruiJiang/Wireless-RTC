@@ -145,6 +145,25 @@ class TaskTests(unittest.TestCase):
                             rows = list(csv.DictReader(f))
                         self.assertTrue(rows)
                         self.assertTrue(all(row["task"] == task for row in rows))
+                        successful = [row for row in rows if row["status"] == "ok"]
+                        measured = [float(row["actual_ms"]) for row in successful]
+                        condition = next(row for row in summary["per_task"]
+                                         if row["task"] == task and row["method"] == method)
+                        self.assertAlmostEqual(condition["average_rtt_ms"],sum(measured)/len(measured))
+                        self.assertEqual(condition["rtt_samples"],len(measured))
+                        self.assertEqual(condition["average_injected_delay_ms"],0.)
+                        with (root/"run"/"tasks"/task/name/"episodes.csv").open() as f:
+                            episode_rows = list(csv.DictReader(f))
+                        for episode_row in episode_rows:
+                            episode_samples = [float(row["actual_ms"]) for row in successful
+                                               if row["episode"] == episode_row["episode"]]
+                            self.assertAlmostEqual(float(episode_row["average_rtt_ms"]),
+                                                   sum(episode_samples)/len(episode_samples))
+                with (root/"run"/"summary.csv").open() as f:
+                    csv_summary = list(csv.DictReader(f))
+                for row, overall in zip(csv_summary, summary["overall"]):
+                    self.assertEqual(float(row["average_rtt_ms"]),overall["average_rtt_ms"])
+                    self.assertEqual(float(row["average_injected_delay_ms"]),0.)
             finally:
                 server.shutdown(); server.server_close(); thread.join(timeout=3)
 

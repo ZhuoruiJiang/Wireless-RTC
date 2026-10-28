@@ -334,6 +334,24 @@ weight. For example, task solve rates 0.8 and 0.4 give an average of 0.6.
 the same averages and task scores. `tasks/TASK/summary.json` reports that task's
 conditions; detailed logs are in `tasks/TASK/CONDITION/`.
 
+Live episode CSV rows and condition, per-task, and overall summaries also include:
+
+| Field | Meaning |
+|---|---|
+| `average_rtt_ms` | Mean measured inference-request RTT, including network, inference, and injected waits |
+| `average_injected_delay_ms` | Mean sampled/clipped artificial wait requested by the server |
+| `average_delay_sleep_ms` | Mean actual server sleep duration for those waits |
+| `rtt_samples`, `injected_delay_samples`, `delay_sleep_samples` | Number of valid measurements for each mean |
+
+These fields appear in `episodes.csv`, `task_summary.csv`, `summary.csv`, and the
+JSON reports. Raw request rows retain `actual_ms`, `injected_delay_ms`, and
+`delay_sleep_ms`. Latency means pool successful inference requests, weighted by
+their measurement counts across episodes and tasks. They include expired chunks
+and final requests drained after an episode, but exclude setup/warmup requests and
+failed or timed-out requests. Missing measurements produce JSON `null` (blank CSV)
+and zero samples; disabled injection produces a measured mean of zero. Unlike
+latency, the solve-rate average still gives each selected task equal weight.
+
 Combined summaries are written only after every selected task finishes. Interrupted
 or failed runs retain their logs and manifest status without publishing a partial
 cross-task average. The manifest records each task's level hash, checkpoint hash,
