@@ -1,0 +1,9 @@
+{
+  "repeat": true,
+  "phases": [
+    {"name": "stable", "requests": 8, "values_ms": [10]},
+    {"name": "oscillating", "requests": 24, "values_ms": [100, 75, 50, 25]},
+    {"name": "isolated_spike", "requests": 1, "values_ms": [200]},
+    {"name": "recovered", "requests": 8, "values_ms": [10]}
+  ]
+}

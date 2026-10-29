@@ -1,5 +1,4 @@
 import argparse
-import csv
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -8,6 +7,7 @@ import platform
 import subprocess
 
 from wireless_rtc.analysis.evaluate import evaluate, read_trace, save_evaluation
+from wireless_rtc.analysis.formatting import ReportWriter
 from wireless_rtc.network.delays import generate_delays
 from wireless_rtc.run_paths import add_output_arguments, resolve_output
 
@@ -32,6 +32,16 @@ def main(argv=None):
     trace.add_argument("--trace", required=True)
     trace.add_argument("--config", default="configs/first_run.json")
     add_output_arguments(trace)
+    qtrain = commands.add_parser("quantile-train", help="Train RTT quantile boosting; select settings on validation only")
+    qtrain.add_argument("--data", nargs="+", required=True, help="Ordered measured CSV traces")
+    qtrain.add_argument("--config", default="configs/quantile_boosting.json")
+    add_output_arguments(qtrain)
+    qtest = commands.add_parser("quantile-evaluate", help="Evaluate a frozen local quantile model on held-out traces")
+    qtest.add_argument("--model", required=True, help="Trusted local model.pkl")
+    qtest.add_argument("--data", nargs="+", required=True)
+    qtest.add_argument("--partition", choices=["test", "all"], default="test",
+                       help="test: held-out partition; all: entirely new traces")
+    add_output_arguments(qtest)
     server = commands.add_parser("serve", help="Probe service; optional pretrained policy backend")
     server.add_argument("--host", default="127.0.0.1")
     server.add_argument("--port", type=int, default=8765)
@@ -39,7 +49,8 @@ def main(argv=None):
     checkpoints.add_argument("--checkpoint",help="One fixed policy checkpoint")
     checkpoints.add_argument("--checkpoint-dir",help="Policy directory for automatic task switching")
     server.add_argument("--level", default="worlds/l/grasp_easy.json")
-    server.add_argument("--delay", choices=["none","normal"], default="none", help="Optional extra policy response wait")
+    server.add_argument("--delay", choices=["none","normal","pattern"], default="none", help="Optional extra policy response wait")
+    server.add_argument("--delay-pattern", default="configs/delay_pattern.json", help="JSON phase pattern used with --delay pattern")
     server.add_argument("--delay-mean-ms", type=float, default=150)
     server.add_argument("--delay-std-ms", type=float, default=50)
     server.add_argument("--delay-max-ms", type=float, default=1000)
@@ -53,6 +64,9 @@ def main(argv=None):
     probe.add_argument("--payload-bytes", type=int, default=1024)
     probe.add_argument("--delay", choices=["none","fixed","random"], default="none")
     probe.add_argument("--seed", type=int, default=42)
+    probe.add_argument("--wifi", action="store_true", help="Log Windows Wi-Fi telemetry in the background (no scans)")
+    probe.add_argument("--wifi-interface", help="Wi-Fi adapter name; required if multiple adapters are present")
+    probe.add_argument("--wifi-interval-ms", type=float, default=1000, help="Wi-Fi telemetry polling interval (default: 1000 ms)")
     sim = commands.add_parser("rtc", help="Actual pretrained RTC/Kinetix with independently injected delays")
     sim.add_argument("--config", default="configs/rtc_fixed.json")
     sim.add_argument("--checkpoint", required=True)
@@ -88,7 +102,18 @@ def main(argv=None):
         if args.command == "rtc-live" and (
                 not math.isfinite(args.timeout) or args.timeout <= 0 or not 1 <= args.port <= 65535):
             parser.error("rtc-live requires a positive finite timeout and port in [1,65535]")
-    if args.command == "serve":
+    if args.command in {"quantile-train", "quantile-evaluate"}:
+        from wireless_rtc.prediction.quantile_boosting import train_quantiles, evaluate_quantiles
+        try:
+            if args.command == "quantile-train":
+                config = json.loads(Path(args.config).read_text(encoding="utf-8"))
+                result = train_quantiles(args.data,config,args.output)
+            else:
+                result = evaluate_quantiles(args.model,args.data,args.output,args.partition)
+        except (ValueError, RuntimeError, FileExistsError) as exc:
+            parser.error(str(exc))
+        print(f"Run output: {Path(result).resolve()}",flush=True)
+    elif args.command == "serve":
         from wireless_rtc.server.service import serve
         response_delay = None
         if args.delay == "normal":
@@ -98,6 +123,15 @@ def main(argv=None):
                                                      args.delay_max_ms,args.delay_seed)
             except ValueError as exc:
                 parser.error(str(exc))
+        elif args.delay == "pattern":
+            from wireless_rtc.server.delay import PatternResponseDelay
+            try:
+                pattern = json.loads(Path(args.delay_pattern).read_text(encoding="utf-8"))
+                response_delay = PatternResponseDelay(pattern)
+            except (OSError, ValueError) as exc:
+                parser.error(f"Invalid delay pattern: {exc}")
+        if response_delay is not None and not (args.checkpoint or args.checkpoint_dir):
+            parser.error("Injected delay requires --checkpoint or --checkpoint-dir")
         policy = None
         if args.checkpoint:
             from wireless_rtc.simulation.kinetix import KinetixPolicy
@@ -109,7 +143,7 @@ def main(argv=None):
             except ValueError as exc:
                 parser.error(str(exc))
         if response_delay is not None and policy is None:
-            parser.error("--delay normal requires --checkpoint or --checkpoint-dir")
+            parser.error("Injected delay requires --checkpoint or --checkpoint-dir")
         serve(args.host, args.port, policy, response_delay)
     elif args.command == "probe":
         print(f"Run output: {Path(args.output).resolve()}",flush=True)
@@ -118,7 +152,8 @@ def main(argv=None):
         if args.delay == "random":
             source = {"kind":"uniform","low_ms":10,"high_ms":70}
         print(run_probe(args.host,args.port,args.output,args.samples,args.interval_ms,
-                        args.payload_bytes,source,seed=args.seed))
+                        args.payload_bytes,source,seed=args.seed,wifi=args.wifi,
+                        wifi_interface=args.wifi_interface,wifi_interval_ms=args.wifi_interval_ms))
     elif args.command in {"rtc", "rtc-live"}:
         config = json.loads(Path(args.config).read_text(encoding="utf-8"))
         print(f"Run output: {Path(args.output).resolve()}",flush=True)
@@ -183,7 +218,7 @@ def main(argv=None):
                 save_evaluation(output/source/name, rows,metrics,meta)
                 summaries.append(dict(source=source,predictor=name,**metrics))
         with (output/"comparison.csv").open("w",newline="",encoding="utf-8") as f:
-            writer = csv.DictWriter(f,fieldnames=list(summaries[0]))
+            writer = ReportWriter(f,fieldnames=list(summaries[0]))
             writer.writeheader()
             writer.writerows(summaries)
         print(json.dumps(summaries,indent=2))

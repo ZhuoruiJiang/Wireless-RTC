@@ -1,5 +1,11 @@
 # Response-delay and WiFi experiments
 
+For the current real-network-only workflow, use
+[the moving-laptop collection guide](real_wifi_collection.md). It includes Windows
+RSSI logging, chronological training splits, and analysis of the October 28 run.
+The synthetic stress methods below are historical alternatives, not prerequisites
+for collecting or evaluating real network data.
+
 ## Establish the limiting component
 
 The wireless hop is a candidate source of latency variation, not an established

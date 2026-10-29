@@ -19,7 +19,8 @@ def make_server(host="127.0.0.1", port=8765, policy=None, response_delay=None):
                         hold = float(request.get("hold_ms", 0))
                         if not 0 <= hold <= 10000:
                             raise ValueError("hold_ms must be in [0,10000]")
-                        time.sleep(hold / 1000)
+                        if hold:
+                            time.sleep(hold / 1000)
                         result = {"payload": request.get("payload", "")}
                     elif operation == "infer" and policy is not None:
                         result = policy.infer(request)

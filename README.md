@@ -1,5 +1,24 @@
 # Wireless RTC
 
+For a deterministic server delay stress test resembling stable/oscillating/spike
+intervals, start the policy server with `--delay pattern --delay-pattern configs/delay_pattern.json`.
+The default adds 10 ms for eight requests, cycles 100/75/50/25 ms for 24 requests,
+adds one 200 ms spike, then 10 ms for eight requests, and repeats. It resets per
+episode so methods receive the same request-indexed sequence. These are extra
+server waits on top of inference and real transport delay; this is a synthetic
+stress test, not replay of the original radio environment. `--delay none` remains
+the default. Actual waits and the pattern configuration are recorded in run logs.
+
+For the offline learned RTT predictor, see
+[quantile gradient boosting](docs/quantile_boosting.md): train/validation/test
+separation, RTT-only versus RTT-plus-SNR, and a frozen-model test command.
+
+For real network experiments with a moving laptop, see
+[Wi-Fi data collection and predictor diagnosis](docs/real_wifi_collection.md).
+Windows probes support `--wifi --wifi-interface "Wi-Fi"` to record RSSI and link
+telemetry without injecting delay. CSV summary reports use two decimal places;
+raw measurement logs retain full precision.
+
 Evaluate causal response-delay prediction for Real-Time Chunking (RTC).
 The laptop owns observations, delay prediction, and execution; a server can serve the
 pretrained policy. This first milestone provides a runnable prediction study,

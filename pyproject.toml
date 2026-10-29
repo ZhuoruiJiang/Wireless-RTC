@@ -9,6 +9,9 @@ description = "Causal delay prediction and reproducible RTC experiments"
 requires-python = ">=3.11"
 dependencies = []
 
+[project.optional-dependencies]
+prediction = ["scikit-learn>=1.5,<2"]
+
 [project.scripts]
 wireless-rtc = "wireless_rtc.cli:main"
 

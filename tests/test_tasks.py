@@ -170,12 +170,12 @@ class TaskTests(unittest.TestCase):
                 with (root/"run"/"summary.csv").open() as f:
                     csv_summary = list(csv.DictReader(f))
                 for row, overall in zip(csv_summary, summary["overall"]):
-                    self.assertEqual(float(row["average_rtt_ms"]),overall["average_rtt_ms"])
+                    self.assertEqual(row["average_rtt_ms"],f'{overall["average_rtt_ms"]:.2f}')
                     self.assertEqual(float(row["average_injected_delay_ms"]),0.)
                     if row["method"] == "naive":
                         self.assertEqual(row["prediction_mae_ms"],"")
                     else:
-                        self.assertEqual(float(row["prediction_mae_ms"]),overall["prediction_mae_ms"])
+                        self.assertEqual(row["prediction_mae_ms"],f'{overall["prediction_mae_ms"]:.2f}')
             finally:
                 server.shutdown(); server.server_close(); thread.join(timeout=3)
 

@@ -5,6 +5,7 @@ __pycache__/
 .uv-cache/
 checkpoints/
 runs/
+data/
 .env
 
 .deps/

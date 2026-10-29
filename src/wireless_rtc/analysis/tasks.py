@@ -1,6 +1,6 @@
 """Per-task reporting and equal-weight task averages for each control condition."""
-import csv
 import json
+from wireless_rtc.analysis.formatting import ReportWriter
 from wireless_rtc.analysis.latency import SUMMARY_METRICS, combine_latency
 
 
@@ -33,14 +33,14 @@ def aggregate_tasks(rows, tasks, conditions):
 def write_task_summary(output, summary):
     (output/"summary.json").write_text(json.dumps(summary,indent=2),encoding="utf-8")
     with (output/"task_summary.csv").open("w",newline="",encoding="utf-8") as f:
-        writer = csv.DictWriter(f,fieldnames=list(summary["per_task"][0]))
+        writer = ReportWriter(f,fieldnames=list(summary["per_task"][0]))
         writer.writeheader()
         writer.writerows(summary["per_task"])
     with (output/"summary.csv").open("w",newline="",encoding="utf-8") as f:
         latency_fields = [field for name, (_, average) in SUMMARY_METRICS.items()
                           for field in (average, f"{name}_samples")]
         fields = ["method","predictor","predictor_basis","average_solve_rate",*latency_fields,*summary["selected_tasks"]]
-        writer = csv.DictWriter(f,fieldnames=fields)
+        writer = ReportWriter(f,fieldnames=fields)
         writer.writeheader()
         for row in summary["overall"]:
             writer.writerow(dict(method=row["method"],predictor=row["predictor"],predictor_basis=row["predictor_basis"],

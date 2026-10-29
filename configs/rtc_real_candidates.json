@@ -1,0 +1,13 @@
+{
+  "seed": 42,
+  "episodes": 20,
+  "tasks": ["grasp_easy", "cartpole_thrust", "catcher_v3", "hard_lunar_lander", "mjc_walker"],
+  "control_ms": 20,
+  "min_execution_steps": 4,
+  "methods": ["naive", "rtc", "wireless_rtc"],
+  "predictors": {
+    "rolling_p95": {"kind": "quantile", "window": 32, "quantile_level": 0.95, "initial_ms": 60},
+    "median_w8": {"kind": "quantile", "window": 8, "quantile_level": 0.5, "initial_ms": 60},
+    "p80_w8": {"kind": "quantile", "window": 8, "quantile_level": 0.8, "initial_ms": 60}
+  }
+}

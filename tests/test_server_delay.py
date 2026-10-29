@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from wireless_rtc.cli import main
 from wireless_rtc.network.transport import RPCClient
-from wireless_rtc.server.delay import NormalResponseDelay
+from wireless_rtc.server.delay import NormalResponseDelay, PatternResponseDelay
 from wireless_rtc.server.service import make_server
 
 
@@ -23,6 +23,54 @@ class Policy:
 
 
 class ServerDelayTests(unittest.TestCase):
+    def test_pattern_cycles_phases_and_resets_without_randomness(self):
+        config = dict(repeat=True,phases=[dict(requests=2,values_ms=[10]),
+                                        dict(requests=5,values_ms=[80,40,20]),dict(requests=1,values_ms=[200])])
+        state = random.getstate()
+        sampler = PatternResponseDelay(config)
+        expected = [10.,10.,80.,40.,20.,80.,40.,200.]
+        self.assertEqual([sampler.sample() for _ in range(10)],expected+[10.,10.])
+        sampler.reset(123)
+        self.assertEqual([sampler.sample() for _ in range(8)],expected)
+        sampler.reset(999)
+        self.assertEqual(sampler.sample(),10.)
+        self.assertEqual(random.getstate(),state)
+        config["phases"][0]["values_ms"][0] = 999
+        self.assertEqual(sampler.describe()["pattern"]["phases"][0]["values_ms"],[10])
+        held = PatternResponseDelay(dict(repeat=False,phases=[dict(requests=2,values_ms=[5,9])]))
+        self.assertEqual([held.sample() for _ in range(4)],[5,9,9,9])
+
+    def test_invalid_pattern_fails_before_checkpoint_loading(self):
+        for config in [{},dict(phases=[]),dict(repeat="yes",phases=[{}]),
+                       dict(phases=[dict(requests=0,values_ms=[10])]),
+                       dict(phases=[dict(requests=True,values_ms=[10])]),
+                       dict(phases=[dict(requests=1,values_ms=[float("nan")])]),
+                       dict(phases=[dict(requests=1,values_ms=[-1])])]:
+            with self.subTest(config=config),self.assertRaises(ValueError):
+                PatternResponseDelay(config)
+        with patch("sys.stderr"),self.assertRaises(SystemExit) as error:
+            main(["serve","--checkpoint","missing.pkl","--delay","pattern","--delay-pattern","missing.json"])
+        self.assertEqual(error.exception.code,2)
+
+    def test_pattern_rpc_records_exact_sequence_and_resets_each_episode(self):
+        sampler = PatternResponseDelay(dict(phases=[dict(requests=3,values_ms=[2,8,0])]))
+        server = make_server("127.0.0.1",0,Policy(),response_delay=sampler)
+        thread = threading.Thread(target=server.serve_forever,daemon=True)
+        thread.start()
+        try:
+            with RPCClient("127.0.0.1",server.server_address[1]) as client:
+                info,_ = client.request("describe")
+                self.assertEqual(info["response_delay"]["kind"],"deterministic_pattern")
+                for seed in [123,999]:
+                    client.request("initialize",seed=seed,observation=[0])
+                    for expected in [2,8,0,2]:
+                        client.request("probe",payload="unchanged")
+                        response,_ = client.request("infer",observation_tick=0)
+                        self.assertEqual(response["injected_delay_ms"],expected)
+                        self.assertGreaterEqual(response["delay_sleep_ms"],expected-.5)
+        finally:
+            server.shutdown();server.server_close();thread.join(timeout=3)
+
     def test_distribution_is_seeded_and_independent(self):
         global_state = random.getstate()
         first,second = NormalResponseDelay(),NormalResponseDelay()
