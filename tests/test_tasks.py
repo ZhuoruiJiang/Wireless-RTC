@@ -67,6 +67,36 @@ class Policy:
 
 
 class TaskTests(unittest.TestCase):
+    def test_second_block_pairs_new_episode_seeds_and_rotates_conditions(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            checkpoints = root/"policies"
+            checkpoints.mkdir()
+            for task in ["grasp_easy","cartpole_thrust"]:
+                task_checkpoint(checkpoints,task).write_bytes(b"test")
+            server = make_server("127.0.0.1",0,PolicyRegistry(checkpoints,Policy))
+            thread = threading.Thread(target=server.serve_forever,daemon=True)
+            thread.start()
+            config = json.loads(Path("configs/rtc_remote.json").read_text())
+            config.update(tasks=["grasp_easy","cartpole_thrust"], episodes=4, blocks=2, block=2, control_ms=5,
+                predictors={"recent_max":{"kind":"max","window":8},"p95":{"kind":"quantile","window":8}},
+                method_predictors={"rtc":["recent_max"],"wireless_rtc":["p95"]},require_no_injected_delay=True)
+            try:
+                with patch("wireless_rtc.simulation.kinetix.KinetixSimulator",side_effect=Simulator),patch("sys.stdout"):
+                    run_remote(config,"127.0.0.1",server.server_address[1],root/"run",{})
+                manifest = json.loads((root/"run/manifest.json").read_text())
+                self.assertEqual(manifest["episode_offset"],2)
+                self.assertEqual(manifest["episodes_per_task_condition"],2)
+                self.assertNotEqual(manifest["tasks"]["grasp_easy"]["condition_order"],manifest["tasks"]["cartpole_thrust"]["condition_order"])
+                for path in (root/"run").glob("tasks/*/*/episodes.csv"):
+                    with path.open() as stream:
+                        rows = list(csv.DictReader(stream))
+                    self.assertEqual([int(r["episode"]) for r in rows],[2,3])
+                    self.assertEqual([int(r["seed"]) for r in rows],[44,45])
+                    self.assertTrue(all(int(r["block"]) == 2 for r in rows))
+            finally:
+                server.shutdown();server.server_close();thread.join(timeout=3)
+
     def test_level_hash_matches_across_windows_and_linux(self):
         original = b'{\n  "env_state": {"position": [1, 2]}\n}\n'
         with tempfile.TemporaryDirectory() as temp:

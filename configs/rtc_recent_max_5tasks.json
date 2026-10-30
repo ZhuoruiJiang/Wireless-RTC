@@ -1,0 +1,16 @@
+{
+  "seed": 42,
+  "episodes": 20,
+  "blocks": 1,
+  "tasks": ["grasp_easy", "cartpole_thrust", "catcher_v3", "hard_lunar_lander", "mjc_walker"],
+  "control_ms": 20,
+  "min_execution_steps": 4,
+  "request_timeout_s": 10,
+  "require_no_injected_delay": true,
+  "wifi": {"enabled": true, "interface": "Wi-Fi", "interval_ms": 1000},
+  "methods": ["rtc"],
+  "method_predictors": {"rtc": ["recent_max"]},
+  "predictors": {
+    "recent_max": {"kind": "max", "window": 8, "initial_ms": 60}
+  }
+}

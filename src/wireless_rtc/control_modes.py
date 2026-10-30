@@ -25,7 +25,16 @@ def predictor_sample(method, inference_ms, response_ms):
 def predictors_for(method,config):
     if method not in CONTROL_MODES:
         raise ValueError(f"Unknown control method: {method}")
-    return [("none",None)] if method == "naive" else config["predictors"].items()
+    if method == "naive":
+        return [("none", None)]
+    selected = config.get("method_predictors", {}).get(method)
+    if selected is None:
+        return config["predictors"].items()
+    if not isinstance(selected, list) or not selected or len(selected) != len(set(selected)):
+        raise ValueError("method_predictors must select a nonempty unique list")
+    if any(name not in config["predictors"] for name in selected):
+        raise ValueError("method_predictors references an unknown predictor")
+    return [(name, config["predictors"][name]) for name in selected]
 
 
 def condition_name(method,predictor):

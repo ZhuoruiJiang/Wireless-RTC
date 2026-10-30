@@ -74,7 +74,7 @@ class LiveTests(unittest.TestCase):
             return [state+1],state+1,False,state+1 >= max_steps
         result = run_live_episode(client,[0],0,step,[[-10-i] for i in range(horizon)],
                                   predictor,control_ms,1,max_steps,0,"rtc",
-                                  self.requests.append,self.ticks.append)
+                                  self.requests.append,self.ticks.append,action_ranges=[2.])
         return result,predictor
 
     def test_response_uses_current_suffix_instead_of_replaying_prefix(self):
@@ -93,6 +93,17 @@ class LiveTests(unittest.TestCase):
             self.assertLessEqual(request["predicted_steps"],request["overlap_steps"])
         completed = [r for r in self.requests if r["status"] == "ok" and r["arrival_tick"] is not None]
         self.assertEqual(len(predictor.history),len(completed))
+        for i,row in enumerate(self.ticks):
+            self.assertEqual(json.loads(row["action"]), [self.actions[i]])
+            if row["chunk_switched"]:
+                self.assertGreater(i,0)
+                self.assertFalse(row["buffer_exhausted"])
+                self.assertFalse(self.ticks[i-1]["buffer_exhausted"])
+                self.assertAlmostEqual(row["boundary_action_jump"],abs(self.actions[i]-self.actions[i-1])/2)
+        self.assertTrue(any(r["chunk_switched"] for r in self.ticks))
+        for row in completed:
+            self.assertEqual(row["buffer_deadline_tick"],row["observation_tick"]+row["overlap_steps"])
+            self.assertEqual(row["deadline_missed"], row["arrival_tick"]>row["buffer_deadline_tick"] or row["stale_response"])
 
     def test_slow_policy_does_not_pause_physics_and_expired_chunks_are_discarded(self):
         with connection(FakePolicy(delay=.08)) as client:
@@ -104,6 +115,8 @@ class LiveTests(unittest.TestCase):
         stale = next(r for r in self.requests if r.get("stale_response"))
         self.assertGreaterEqual(stale["elapsed_ticks"],4)
         self.assertEqual(stale["discard_reason"],"expired_chunk")
+        self.assertTrue(stale["deadline_missed"])
+        self.assertTrue(all(row["boundary_action_jump"] is None for row in self.ticks))
 
     def test_invalid_response_is_logged_and_never_updates_predictor(self):
         with connection(FakePolicy(bad_tick=True)) as client:
@@ -131,6 +144,8 @@ class LiveTests(unittest.TestCase):
             first_id = self.requests[0]["request_id"]
             self.assertEqual(self.requests[0]["discard_reason"],"episode_ended")
             self.assertIsNone(self.requests[0]["arrival_tick"])
+            self.assertFalse(self.requests[0]["deadline_evaluable"])
+            self.assertIsNone(self.requests[0]["deadline_missed"])
             self.assertEqual(first["rtt_samples"],1)
             self.assertEqual(first["average_rtt_ms"],self.requests[0]["actual_ms"])
             second,_ = self.run_episode(client,max_steps=1)

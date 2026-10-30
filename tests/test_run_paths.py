@@ -11,6 +11,18 @@ from wireless_rtc.run_paths import resolve_output
 
 
 class RunPathTests(unittest.TestCase):
+    def test_experiment_setting_split_and_legacy_paths(self):
+        args = SimpleNamespace(output=None, tag=None, command="network-characterize", output_root="runs",
+                               experiment="midterm", setting="walking", split="test")
+        result = resolve_output(args)
+        self.assertEqual(result.parent, Path("runs/midterm/network-characterization/walking/test"))
+        args.experiment = "../escape"
+        with self.assertRaises(ValueError):
+            resolve_output(args)
+        args.experiment = None
+        with self.assertRaises(ValueError):
+            resolve_output(args)
+
     def test_tag_datetime_and_collision_do_not_overwrite(self):
         with tempfile.TemporaryDirectory() as temp:
             args = SimpleNamespace(output=None,tag="campus",command="rtc-live",output_root=temp)

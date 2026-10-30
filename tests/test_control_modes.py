@@ -62,6 +62,11 @@ class ModeTests(unittest.TestCase):
         self.assertEqual(list(predictors_for("naive",config)),[("none",None)])
         self.assertEqual(len(list(predictors_for("rtc",config))),2)
         self.assertEqual(len(list(predictors_for("wireless_rtc",config))),2)
+        config["method_predictors"] = {"rtc": ["b"]}
+        self.assertEqual(list(predictors_for("rtc",config)), [("b", {})])
+        config["method_predictors"]["rtc"] = ["missing"]
+        with self.assertRaisesRegex(ValueError, "unknown predictor"):
+            list(predictors_for("rtc",config))
 
     def test_old_server_protocol_is_rejected_before_mislabeled_experiment(self):
         sim = SimpleNamespace(jax=SimpleNamespace(devices=lambda:["cpu"]),jnp=None,np=None)

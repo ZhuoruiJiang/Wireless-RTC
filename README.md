@@ -528,3 +528,17 @@ and predictor comparisons. Disable viewing for timing comparisons.
 
 See [the experiment contract](docs/experiment.md) for timing, metrics, and later tuning.
 Upstream reference: https://github.com/Physical-Intelligence/real-time-chunking-kinetix
+
+## Midterm network characterization
+
+For exact input run lists, use [the selection configurations](docs/result_selection.md)
+for `network-summary`, `prediction-summary`, and `rollout-summary`.
+
+For simulated control trials and Tables 3--4, see [the rollout guide](docs/robot_rollouts.md).
+
+Start with [the Table 1 collection guide](docs/network_characterization.md).
+`network-characterize --setting stationary` and `--setting walking` record timed
+policy-response sessions with Wi-Fi telemetry. `network-summary` exports the
+concise Table 1 as CSV and LaTeX. New runs are automatically grouped under
+`runs/midterm/network-characterization/<setting>/<split>/`; existing runs and
+saved models remain available at their original paths.

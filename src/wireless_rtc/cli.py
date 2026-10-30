@@ -67,6 +67,42 @@ def main(argv=None):
     probe.add_argument("--wifi", action="store_true", help="Log Windows Wi-Fi telemetry in the background (no scans)")
     probe.add_argument("--wifi-interface", help="Wi-Fi adapter name; required if multiple adapters are present")
     probe.add_argument("--wifi-interval-ms", type=float, default=1000, help="Wi-Fi telemetry polling interval (default: 1000 ms)")
+    characterize = commands.add_parser("network-characterize", help="Timed Wi-Fi characterization for Table 1 (fixed policy workload by default)")
+    add_output_arguments(characterize)
+    characterize.set_defaults(experiment="midterm", split="test")
+    characterize.add_argument("--host", default="127.0.0.1")
+    characterize.add_argument("--port", type=int, default=8765)
+    characterize.add_argument("--duration-s", type=float, default=600)
+    characterize.add_argument("--interval-ms", type=float, default=80, help="Pause after each response, not a fixed sampling period")
+    characterize.add_argument("--timeout", type=float, default=10)
+    characterize.add_argument("--workload", choices=["policy", "echo"], default="policy")
+    characterize.add_argument("--task", default="cartpole_thrust")
+    characterize.add_argument("--payload-bytes", type=int, default=1024, help="Echo workload only")
+    characterize.add_argument("--seed", type=int, default=42)
+    characterize.add_argument("--warmup", type=int, default=5)
+    characterize.add_argument("--no-wifi", action="store_true", help="Disable radio collection for a transport-only diagnostic")
+    characterize.add_argument("--wifi-interface")
+    characterize.add_argument("--wifi-interval-ms", type=float, default=1000)
+    characterize.add_argument("--notes", default="", help="Location or walking route and approximate lap time")
+    network_summary = commands.add_parser("network-summary", help="Export Table 1 CSV and LaTeX from comparable completed runs")
+    network_summary.add_argument("--config", default="configs/network_summary.json", help="Explicit input run selection")
+    network_summary.add_argument("--experiment", default="midterm")
+    network_summary.add_argument("--output-root", default="runs")
+    network_summary.add_argument("--split", choices=["development", "train", "validation", "test"])
+    network_summary.add_argument("--workload", choices=["policy", "echo"])
+    network_summary.add_argument("--settings", nargs="+", choices=["strong", "weak", "stationary", "walking"],
+                                 help="Include only these settings, in this order; use strong weak for the revised midterm")
+    prediction_summary = commands.add_parser("prediction-summary", help="Table 2 on explicitly configured sessions; no collection or training")
+    add_output_arguments(prediction_summary)
+    prediction_summary.set_defaults(experiment="midterm", tag="table2", split="reports")
+    prediction_summary.add_argument("--config", default="configs/midterm_prediction.json")
+    prediction_summary.add_argument("--table1", help="Optional explicit Table 1 summary.json overriding the configured run selection")
+    rollout_summary = commands.add_parser("rollout-summary", help="Tables 3/4 and internal diagnostics from completed rollout blocks")
+    rollout_summary.add_argument("--config", default="configs/rollout_summary.json", help="Explicit rollout run selection")
+    add_output_arguments(rollout_summary)
+    rollout_summary.set_defaults(experiment="midterm", tag="tables3-4", split="reports")
+    rollout_summary.add_argument("--settings", nargs="+", choices=["strong", "weak"])
+    rollout_summary.add_argument("--allow-partial", action="store_true", help="Preliminary export with missing blocks explicitly recorded")
     sim = commands.add_parser("rtc", help="Actual pretrained RTC/Kinetix with independently injected delays")
     sim.add_argument("--config", default="configs/rtc_fixed.json")
     sim.add_argument("--checkpoint", required=True)
@@ -80,13 +116,16 @@ def main(argv=None):
     live.add_argument("--host", default="127.0.0.1")
     live.add_argument("--port", type=int, default=8765)
     live.add_argument("--timeout", type=float, default=120, help="RPC timeout in seconds; includes startup warmup")
+    live.add_argument("--block", type=int, help="Numbered rollout block (1-based); required by the midterm rollout config")
     add_output_arguments(live)
     live.add_argument("--view", action="store_true", help="Show simulation on a local browser viewer")
     live.add_argument("--view-port", type=int, default=8080)
     live.add_argument("--view-fps", type=float, default=10)
     live.set_defaults(view_pace=False)
     args = parser.parse_args(argv)
-    if args.command != "serve":
+    if args.command == "rtc-live" and args.block is not None and args.tag is None and args.output is None:
+        args.tag = f"block{args.block:02d}"
+    if args.command not in {"serve", "network-summary"}:
         try:
             args.output = str(resolve_output(args))
         except ValueError as exc:
@@ -102,7 +141,55 @@ def main(argv=None):
         if args.command == "rtc-live" and (
                 not math.isfinite(args.timeout) or args.timeout <= 0 or not 1 <= args.port <= 65535):
             parser.error("rtc-live requires a positive finite timeout and port in [1,65535]")
-    if args.command in {"quantile-train", "quantile-evaluate"}:
+    if args.command == "rollout-summary":
+        from wireless_rtc.analysis.rollout_summary import export_rollouts
+        from wireless_rtc.analysis.run_selection import read_config
+        try:
+            _, config = read_config(args.config)
+            export_rollouts(Path(args.output_root)/args.experiment/"rtc-live", args.output, args.settings,
+                            args.allow_partial or config.get("allow_partial", False), args.config)
+        except (ValueError, OSError) as exc:
+            parser.error(str(exc))
+    elif args.command == "prediction-summary":
+        from wireless_rtc.analysis.midterm_prediction import evaluate_table2
+        from wireless_rtc.analysis.run_selection import read_config, data_path
+        from wireless_rtc.network.characterization import select_network_runs
+        try:
+            config_path, config = read_config(args.config)
+            root = Path(args.output_root) / args.experiment / "network-characterization"
+            selection = None if args.table1 else select_network_runs(root,
+                split=config.get("split", "test"), workload=config.get("workload", "policy"), selection_config=args.config)
+            model = data_path(config_path, config, config["model"]) if config.get("model") else None
+            evaluate_table2(args.table1, args.output, history=config["history"], control_ms=config["control_ms"], model=model, selection=selection)
+        except (ValueError, OSError, RuntimeError) as exc:
+            parser.error(str(exc))
+    elif args.command == "network-summary":
+        from types import SimpleNamespace
+        from wireless_rtc.network.characterization import export_table
+        from wireless_rtc.analysis.run_selection import read_config
+        try:
+            _, config = read_config(args.config)
+            destination = resolve_output(SimpleNamespace(output=None, tag="table1", command="network-characterization",
+                output_root=args.output_root, experiment=args.experiment, setting=None, split="reports"))
+            root = Path(args.output_root) / args.experiment / "network-characterization"
+            export_table(root, destination, args.split or config.get("split", "test"),
+                         args.workload or config.get("workload", "policy"), args.settings, args.config)
+        except (ValueError, OSError) as exc:
+            parser.error(str(exc))
+    elif args.command == "network-characterize":
+        from wireless_rtc.network.characterization import run_characterization
+        if args.setting is None:
+            parser.error("network-characterize requires --setting strong, weak, stationary or walking")
+        print(f"Run output: {Path(args.output).resolve()}", flush=True)
+        try:
+            run_characterization(args.host, args.port, args.output, setting=args.setting, split=args.split,
+                duration_s=args.duration_s, interval_ms=args.interval_ms, timeout=args.timeout,
+                workload=args.workload, task=args.task, payload_bytes=args.payload_bytes, seed=args.seed,
+                warmup=args.warmup, wifi=not args.no_wifi, wifi_interface=args.wifi_interface,
+                wifi_interval_ms=args.wifi_interval_ms, notes=args.notes, run_metadata=metadata(vars(args)))
+        except (ValueError, OSError, EOFError) as exc:
+            parser.error(str(exc))
+    elif args.command in {"quantile-train", "quantile-evaluate"}:
         from wireless_rtc.prediction.quantile_boosting import train_quantiles, evaluate_quantiles
         try:
             if args.command == "quantile-train":
@@ -156,6 +243,8 @@ def main(argv=None):
                         wifi_interface=args.wifi_interface,wifi_interval_ms=args.wifi_interval_ms))
     elif args.command in {"rtc", "rtc-live"}:
         config = json.loads(Path(args.config).read_text(encoding="utf-8"))
+        if args.command == "rtc-live" and args.block is not None:
+            config["block"] = args.block
         print(f"Run output: {Path(args.output).resolve()}",flush=True)
         def run(viewer=None):
             if args.command == "rtc":
@@ -163,7 +252,9 @@ def main(argv=None):
                 return run_experiment(config,args.checkpoint,args.output,metadata(config),
                                       viewer=viewer,view_pace=args.view_pace)
             from wireless_rtc.client.live import run_remote
-            return run_remote(config,args.host,args.port,args.output,metadata(config),
+            run_metadata = metadata(config)
+            run_metadata.update(experiment=args.experiment, setting=args.setting, split=args.split)
+            return run_remote(config,args.host,args.port,args.output,run_metadata,
                               timeout=args.timeout,viewer=viewer)
         if not args.view:
             run()

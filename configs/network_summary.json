@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "base_dir": "..",
+  "split": "test",
+  "workload": "policy",
+  "runs": {
+    "strong": [
+      "runs/midterm/network-characterization/stable/test/network-characterize-20261030-022704-826585Z",
+      "runs/midterm/network-characterization/stable/test/network-characterize-20261030-024150-413147Z"
+    ],
+    "weak": [
+      "runs/midterm/network-characterization/weak/test/network-characterize-20261030-064156-590640Z"
+    ]
+  }
+}

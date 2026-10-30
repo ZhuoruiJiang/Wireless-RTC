@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "base_dir": "..",
+  "runs_config": "network_summary.json",
+  "history": 8,
+  "control_ms": 20,
+  "model": "runs/older_runs/qgb-20261029-052828-362342Z/model.pkl"
+}

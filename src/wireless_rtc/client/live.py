@@ -14,6 +14,8 @@ from wireless_rtc.control_modes import (CONTROL_MODES, PROTOCOL_VERSION, conditi
 from wireless_rtc.tasks import selected_tasks
 from wireless_rtc.analysis.tasks import aggregate_tasks, write_task_summary
 from wireless_rtc.analysis.latency import LatencyStats, combine_latency
+from wireless_rtc.network.wifi import WIFI_FIELDS, WifiSampler
+from contextlib import nullcontext
 
 
 REQUEST_FIELDS = ["task", "episode", "request_id", "observation_tick", "status", "actual_ms",
@@ -22,9 +24,10 @@ REQUEST_FIELDS = ["task", "episode", "request_id", "observation_tick", "status",
                   "stale_response", "discard_reason", "server_ms", "inference_ms",
                   "injected_delay_ms", "delay_sleep_ms",
                   "predictor_basis", "predictor_observation_ms", "budget_exceeded",
-                  "failed_elapsed_ms", "error"]
+                  "failed_elapsed_ms", "error", "request_wall_time_ns", "request_start_monotonic_ns",
+                  "response_consumed_wall_time_ns", "buffer_deadline_tick", "deadline_evaluable", "deadline_missed"] + WIFI_FIELDS + ["wifi_age_ms"]
 TICK_FIELDS = ["task", "episode", "tick", "wall_time_ns", "action_origin_tick", "buffer_exhausted",
-               "step_wall_ms", "deadline_overrun_ms"]
+               "step_wall_ms", "deadline_overrun_ms", "action", "chunk_switched", "boundary_action_jump"]
 
 
 def validate_actions(response, tick, horizon, action_dim, task=None):
@@ -61,7 +64,8 @@ class ActionBuffer:
 
 def run_live_episode(client, observation, state, step, initial_actions, predictor,
                      control_ms, min_execution_steps, max_steps, episode, method,
-                     write_request, write_tick, viewer=None, initial_inference_ms=None, task=None):
+                     write_request, write_tick, viewer=None, initial_inference_ms=None, task=None,
+                     action_ranges=None, telemetry=None, require_no_injected_delay=False):
     """`step` returns (observation-list, state, success, done).
 
     Only this thread advances physics. RPC serialization/decoding runs on a single
@@ -78,6 +82,10 @@ def run_live_episode(client, observation, state, step, initial_actions, predicto
         predictor.update(inference_time(initial_inference_ms))
     buffer = ActionBuffer(initial_actions)
     horizon, action_dim = buffer.horizon, buffer.action_dim
+    if action_ranges is not None and (len(action_ranges) != action_dim or any(
+            not math.isfinite(x) or x < 0 for x in action_ranges)):
+        raise ValueError("Action ranges must match action dimensions and be finite/nonnegative")
+    previous_action, previous_empty, previous_origin = None, True, None
     executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="policy-rpc")
     pending = None
     tick = next_request_tick = exhausted = overruns = 0
@@ -92,6 +100,8 @@ def run_live_episode(client, observation, state, step, initial_actions, predicto
         try:
             response, _ = client.request("infer", **fields)
             validate_actions(response, fields["observation_tick"], horizon, action_dim,task)
+            if require_no_injected_delay and response.get("injected_delay_ms") != 0:
+                raise ValueError("Midterm rollout requires server --delay none")
             if method == "rtc":
                 inference_time(response.get("inference_ms"))
             return response, "", time.perf_counter()
@@ -104,7 +114,16 @@ def run_live_episode(client, observation, state, step, initial_actions, predicto
         elapsed_ms = (received_at-pending["submitted"])*1000
         row = dict(pending["row"])
         row.update(status="error" if failure else "ok", arrival_tick=arrival_tick,
-                   error=failure, discard_reason="episode_ended" if arrival_tick is None else "")
+                   error=failure, discard_reason="episode_ended" if arrival_tick is None else "",
+                   response_consumed_wall_time_ns=time.time_ns())
+        deadline = row["buffer_deadline_tick"]
+        # A drained response after termination is evaluated only if an uncovered
+        # tick actually executed during this episode. Wall-clock draining cannot
+        # turn an unobserved future controller deadline into a miss.
+        row["deadline_evaluable"] = (arrival_tick >= deadline if failure else True) if arrival_tick is not None else tick > deadline
+        row["deadline_missed"] = (True if arrival_tick is None else
+            bool(failure) or arrival_tick > deadline or arrival_tick-row["observation_tick"] >= horizon
+            ) if row["deadline_evaluable"] else None
         if failure:
             row["failed_elapsed_ms"] = elapsed_ms  # Censored; never feed this to the predictor.
         else:
@@ -149,7 +168,11 @@ def run_live_episode(client, observation, state, step, initial_actions, predicto
                 row = dict(task=task,episode=episode, request_id=client.counter, observation_tick=tick, predicted_ms=prediction,
                            predicted_steps=raw_d, applied_prefix_steps=min(raw_d,valid),
                            overlap_steps=valid, prefix_clipped=raw_d>valid,
-                           predictor_basis=CONTROL_MODES[method])
+                           predictor_basis=CONTROL_MODES[method], request_wall_time_ns=time.time_ns(),
+                           buffer_deadline_tick=tick+valid)
+                if telemetry is not None:
+                    row.update(telemetry.snapshot())
+                row["request_start_monotonic_ns"] = time.monotonic_ns()
                 fields = dict(observation=observation, previous_actions=previous,
                               predicted_steps=min(raw_d,valid), overlap_steps=valid,
                               observation_tick=tick, method=method)
@@ -159,6 +182,12 @@ def run_live_episode(client, observation, state, step, initial_actions, predicto
                 pending = dict(row=row, submitted=submitted, future=executor.submit(request,fields))
                 next_request_tick = tick + min_execution_steps
             action, empty = buffer.action(tick)
+            switched = (previous_action is not None and not previous_empty and not empty
+                        and previous_origin != buffer.origin)
+            jump = None
+            if switched and action_ranges is not None:
+                components = [(a-b)/span for a,b,span in zip(action, previous_action, action_ranges) if span > 0]
+                jump = math.sqrt(sum(x*x for x in components)) if components else None
             started = time.perf_counter()
             observation, state, success, done = step(state,action)
             step_ms = (time.perf_counter()-started)*1000
@@ -174,7 +203,10 @@ def run_live_episode(client, observation, state, step, initial_actions, predicto
             overruns += int(overrun_ms>0)
             write_tick(dict(task=task,episode=episode, tick=tick, wall_time_ns=time.time_ns(),
                             action_origin_tick=buffer.origin, buffer_exhausted=empty,
-                            step_wall_ms=step_ms, deadline_overrun_ms=overrun_ms))
+                            step_wall_ms=step_ms, deadline_overrun_ms=overrun_ms,
+                            action=json.dumps(action, separators=(",", ":")),
+                            chunk_switched=switched, boundary_action_jump=jump))
+            previous_action, previous_empty, previous_origin = list(action), empty, buffer.origin
             tick += 1
             if done or tick >= max_steps:
                 break
@@ -213,6 +245,15 @@ def validate_config(config):
         if not name or any(c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-" for c in name):
             raise ValueError("Predictor names must use letters, numbers, underscores or hyphens")
         make_predictor(settings)
+    for method in config["methods"]:
+        list(predictors_for(method, config))
+    blocks = config.get("blocks", 1)
+    block = config.get("block", 1)
+    if (type(blocks) is not int or blocks < 1 or type(block) is not int or not 1 <= block <= blocks
+            or config["episodes"] % blocks or (blocks > 1 and "block" not in config)):
+        raise ValueError("Choose --block in [1,blocks]; total episodes must divide evenly across blocks")
+    if not math.isfinite(config.get("request_timeout_s", 10)) or config.get("request_timeout_s", 10) <= 0:
+        raise ValueError("request_timeout_s must be positive and finite")
 
 
 def run_remote(config, host, port, output, metadata, timeout=120, viewer=None):
@@ -222,9 +263,16 @@ def run_remote(config, host, port, output, metadata, timeout=120, viewer=None):
     output = Path(output)
     output.mkdir(parents=True,exist_ok=False)
     manifest_path = output/"manifest.json"
+    conditions = [(method, name, settings) for method in config["methods"] for name, settings in predictors_for(method, config)]
+    blocks, block = config.get("blocks", 1), config.get("block", 1)
+    episodes_per_block = config["episodes"] // blocks
+    episode_offset = (block-1) * episodes_per_block
     metadata.update(kind="pretrained_kinetix_live_rpc", status="running", config=config,
                     host=host, port=port, timeout=timeout, tasks={},
                     selected_tasks=[task["name"] for task in tasks],
+                    rollout_metrics_version=1, block=block, blocks=blocks,
+                    episodes_per_task_condition=episodes_per_block, episode_offset=episode_offset,
+                    conditions=[dict(method=m,predictor=n) for m,n,_ in conditions],
                     viewer=dict(enabled=viewer is not None, fps=viewer.fps if viewer else None),
                     timing="Paced wall-clock simulation; RTT from submission through response validation",
                     fallback="Zero action while physics advances when the action buffer is exhausted")
@@ -234,8 +282,11 @@ def run_remote(config, host, port, output, metadata, timeout=120, viewer=None):
     save_manifest()
     summaries = []
     current_task = None
+    wifi_config = config.get("wifi", {})
+    metadata["wifi"] = wifi_config
     try:
-        with RPCClient(host,port,timeout) as client:
+        sampler = WifiSampler(output/"wifi.csv", wifi_config.get("interface"), wifi_config.get("interval_ms",1000)) if wifi_config.get("enabled") else None
+        with (sampler if sampler is not None else nullcontext()) as telemetry, RPCClient(host,port,timeout) as client:
             description,_ = client.request("describe")
             if description.get("protocol_version") != PROTOCOL_VERSION or description.get("control_modes") != CONTROL_MODES:
                 raise ValueError("Task-selection protocol v3 required: update and restart the policy server and client")
@@ -243,6 +294,8 @@ def run_remote(config, host, port, output, metadata, timeout=120, viewer=None):
             if missing:
                 raise ValueError(f"Server is missing tasks {missing}. Download their checkpoints and start serve with --checkpoint-dir.")
             metadata["server"] = description
+            if config.get("require_no_injected_delay") and description.get("response_delay", {}).get("kind") != "none":
+                raise ValueError("Midterm rollout requires server --delay none")
             save_manifest()
             for task_index,spec in enumerate(tasks,1):
                 current_task = task = spec["name"]
@@ -252,6 +305,7 @@ def run_remote(config, host, port, output, metadata, timeout=120, viewer=None):
                                   actual_ms=None,predicted_ms=None,inference_ms=None,injected_delay_ms=None)
                 sim = KinetixSimulator(spec["level"],config["seed"])
                 jax,jnp,np = sim.jax,sim.jnp,sim.np
+                client.socket.settimeout(timeout)
                 selected,_ = client.request("select_task",task=task)
                 expected = dict(task=task,level_sha256=sim.level_sha256,
                                 observation_dim=sim.observation_dim,action_dim=sim.action_dim)
@@ -272,63 +326,75 @@ def run_remote(config, host, port, output, metadata, timeout=120, viewer=None):
                 task_directory = output/"tasks"/task
                 task_directory.mkdir(parents=True)
                 task_summaries = []
-                for method in config["methods"]:
-                    for name,settings in predictors_for(method,config):
-                        directory = task_directory/condition_name(method,name)
-                        directory.mkdir()
-                        episodes = []
-                        with (directory/"requests.csv").open("w",newline="",encoding="utf-8") as rf, (
-                                directory/"ticks.csv").open("w",newline="",encoding="utf-8") as tf:
-                            requests = csv.DictWriter(rf,fieldnames=REQUEST_FIELDS)
-                            ticks = csv.DictWriter(tf,fieldnames=TICK_FIELDS)
-                            requests.writeheader(); ticks.writeheader()
-                            def write_request(row):
-                                requests.writerow(row); rf.flush()
-                            def write_tick(row):
-                                ticks.writerow(row); tf.flush()
-                            for episode in range(config["episodes"]):
-                                if viewer:
-                                    viewer.update(phase="Warming physics / policy before episode",method=method,
-                                                  predictor=name,episode=episode+1,episodes=config["episodes"],
-                                                  tick=0,success=False,actual_ms=None,delay_kind="measured",
-                                                  buffer_exhaustion_steps=0,injected_delay_ms=None,
-                                                  predictor_basis=CONTROL_MODES[method],predicted_ms=None,inference_ms=None)
-                                seed = (config["seed"]+episode) % 2**32
-                                key = jax.random.key(seed)
-                                obs,state = sim.reset(key)
-                                warm = sim.step(key,state,jnp.zeros(sim.action_dim))
-                                jax.block_until_ready(warm)
-                                initial,_ = client.request("initialize",task=task,observation=np.asarray(obs).tolist(),seed=seed)
-                                actions = validate_actions(initial,0,horizon,sim.action_dim,task)
-                                calibration_ms = inference_time(initial.get("calibration_inference_ms")) if method == "rtc" else None
-                                env_key = jax.random.fold_in(key,1)
-                                def step(state,action):
-                                    nonlocal env_key
-                                    env_key,step_key = jax.random.split(env_key)
-                                    obs,state,reward,done,info = sim.step(step_key,state,jnp.asarray(action))
-                                    return (np.asarray(obs).tolist(),state,bool(info.get("success",reward>0)),bool(done))
-                                result = run_live_episode(client,np.asarray(obs).tolist(),state,step,actions,
-                                                          make_predictor(settings) if settings is not None else None,
-                                                          config["control_ms"],config["min_execution_steps"],int(sim.params.max_timesteps),
-                                                          episode,method,write_request,write_tick,viewer,
-                                                          initial_inference_ms=calibration_ms,task=task)
-                                result.update(task=task,calibration_inference_ms=calibration_ms)
-                                episodes.append(result)
-                                with (directory/"episodes.csv").open("w",newline="",encoding="utf-8") as ef:
-                                    writer = csv.DictWriter(ef,fieldnames=list(result))
-                                    writer.writeheader(); writer.writerows(episodes)
-                                print(json.dumps(dict(method=method,predictor=name,**result)),flush=True)
-                                if result["status"] != "ok":
-                                    raise RuntimeError(result["error"])
-                        summary = dict(task=task,method=method,predictor=name,predictor_basis=CONTROL_MODES[method],
-                                       episodes=len(episodes),successes=sum(e["success"] for e in episodes),
-                                       solve_rate=sum(e["success"] for e in episodes)/len(episodes),
-                                       buffer_exhaustion_steps=sum(e["buffer_exhaustion_steps"] for e in episodes),
-                                       deadline_overrun_steps=sum(e["deadline_overrun_steps"] for e in episodes),
-                                       **combine_latency(episodes))
-                        summaries.append(summary)
-                        task_summaries.append(summary)
-                        (directory/"summary.json").write_text(json.dumps(summary,indent=2),encoding="utf-8")
+                shift = ((block-1)*max(1,len(conditions)//blocks)+task_index-1) % len(conditions)
+                ordered_conditions = conditions[shift:]+conditions[:shift]
+                metadata["tasks"][task]["condition_order"] = [condition_name(m,n) for m,n,_ in ordered_conditions]
+                action_ranges = None
+                if hasattr(sim, "env"):
+                    space = sim.env.action_space(sim.params)
+                    action_ranges = np.asarray(space.high-space.low).tolist()
+                metadata["tasks"][task]["action_ranges"] = action_ranges
+                save_manifest()
+                for method,name,settings in ordered_conditions:
+                    directory = task_directory/condition_name(method,name)
+                    directory.mkdir()
+                    episodes = []
+                    print(f"Block {block}/{blocks} | {task} | {condition_name(method,name)} | {episodes_per_block} episodes", flush=True)
+                    with (directory/"requests.csv").open("w",newline="",encoding="utf-8") as rf, (
+                            directory/"ticks.csv").open("w",newline="",encoding="utf-8") as tf:
+                        requests = csv.DictWriter(rf,fieldnames=REQUEST_FIELDS)
+                        ticks = csv.DictWriter(tf,fieldnames=TICK_FIELDS)
+                        requests.writeheader(); ticks.writeheader()
+                        def write_request(row):
+                            requests.writerow(row); rf.flush()
+                        def write_tick(row):
+                            ticks.writerow(row); tf.flush()
+                        for episode in range(episode_offset,episode_offset+episodes_per_block):
+                            if viewer:
+                                viewer.update(phase="Warming physics / policy before episode",method=method,
+                                              predictor=name,episode=episode+1,episodes=config["episodes"],
+                                              tick=0,success=False,actual_ms=None,delay_kind="measured",
+                                              buffer_exhaustion_steps=0,injected_delay_ms=None,
+                                              predictor_basis=CONTROL_MODES[method],predicted_ms=None,inference_ms=None)
+                            seed = (config["seed"]+episode) % 2**32
+                            key = jax.random.key(seed)
+                            obs,state = sim.reset(key)
+                            warm = sim.step(key,state,jnp.zeros(sim.action_dim))
+                            jax.block_until_ready(warm)
+                            client.socket.settimeout(timeout)
+                            initial,_ = client.request("initialize",task=task,observation=np.asarray(obs).tolist(),seed=seed)
+                            actions = validate_actions(initial,0,horizon,sim.action_dim,task)
+                            calibration_ms = inference_time(initial.get("calibration_inference_ms")) if method == "rtc" else None
+                            client.socket.settimeout(config.get("request_timeout_s", timeout))
+                            env_key = jax.random.fold_in(key,1)
+                            def step(state,action):
+                                nonlocal env_key
+                                env_key,step_key = jax.random.split(env_key)
+                                obs,state,reward,done,info = sim.step(step_key,state,jnp.asarray(action))
+                                return (np.asarray(obs).tolist(),state,bool(info.get("success",reward>0)),bool(done))
+                            result = run_live_episode(client,np.asarray(obs).tolist(),state,step,actions,
+                                                      make_predictor(settings) if settings is not None else None,
+                                                      config["control_ms"],config["min_execution_steps"],int(sim.params.max_timesteps),
+                                                      episode,method,write_request,write_tick,viewer,
+                                                      initial_inference_ms=calibration_ms,task=task, action_ranges=action_ranges,
+                                                      telemetry=telemetry, require_no_injected_delay=config.get("require_no_injected_delay",False))
+                            result.update(task=task,seed=seed,block=block,calibration_inference_ms=calibration_ms)
+                            episodes.append(result)
+                            with (directory/"episodes.csv").open("w",newline="",encoding="utf-8") as ef:
+                                writer = csv.DictWriter(ef,fieldnames=list(result))
+                                writer.writeheader(); writer.writerows(episodes)
+                            print(json.dumps(dict(method=method,predictor=name,**result)),flush=True)
+                            if result["status"] != "ok":
+                                raise RuntimeError(result["error"])
+                    summary = dict(task=task,method=method,predictor=name,predictor_basis=CONTROL_MODES[method],
+                                   episodes=len(episodes),successes=sum(e["success"] for e in episodes),
+                                   solve_rate=sum(e["success"] for e in episodes)/len(episodes),
+                                   buffer_exhaustion_steps=sum(e["buffer_exhaustion_steps"] for e in episodes),
+                                   deadline_overrun_steps=sum(e["deadline_overrun_steps"] for e in episodes),
+                                   **combine_latency(episodes))
+                    summaries.append(summary)
+                    task_summaries.append(summary)
+                    (directory/"summary.json").write_text(json.dumps(summary,indent=2),encoding="utf-8")
                 (task_directory/"summary.json").write_text(json.dumps(task_summaries,indent=2),encoding="utf-8")
                 metadata["tasks"][task]["status"] = "completed"
                 save_manifest()

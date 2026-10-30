@@ -1,0 +1,25 @@
+{
+  "seed": 42,
+  "episodes": 20,
+  "blocks": 4,
+  "tasks": ["catcher_v3", "hard_lunar_lander", "mjc_walker"],
+  "control_ms": 20,
+  "min_execution_steps": 4,
+  "request_timeout_s": 10,
+  "require_no_injected_delay": true,
+  "wifi": {"enabled": true, "interface": "Wi-Fi", "interval_ms": 1000},
+  "methods": ["naive", "rtc", "wireless_rtc"],
+  "method_predictors": {
+    "rtc": ["recent_max"],
+    "wireless_rtc": ["last_response", "recent_max", "rolling_p50", "rolling_p70", "rolling_p80", "rolling_p90", "rolling_p95"]
+  },
+  "predictors": {
+    "last_response": {"kind": "last", "window": 8, "initial_ms": 60},
+    "recent_max": {"kind": "max", "window": 8, "initial_ms": 60},
+    "rolling_p50": {"kind": "quantile", "window": 8, "quantile_level": 0.5, "initial_ms": 60},
+    "rolling_p70": {"kind": "quantile", "window": 8, "quantile_level": 0.7, "initial_ms": 60},
+    "rolling_p80": {"kind": "quantile", "window": 8, "quantile_level": 0.8, "initial_ms": 60},
+    "rolling_p90": {"kind": "quantile", "window": 8, "quantile_level": 0.9, "initial_ms": 60},
+    "rolling_p95": {"kind": "quantile", "window": 8, "quantile_level": 0.95, "initial_ms": 60}
+  }
+}
