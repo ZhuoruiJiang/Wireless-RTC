@@ -1,0 +1,4 @@
+method,predictor,predictor_basis,average_solve_rate,average_rtt_ms,rtt_samples,average_injected_delay_ms,injected_delay_samples,average_delay_sleep_ms,delay_sleep_samples,prediction_mae_ms,prediction_samples,rtt_prediction_mae_ms,rtt_prediction_samples,grasp_easy,cartpole_thrust,catcher_v3,hard_lunar_lander,mjc_walker
+naive,none,none,0.30,49.26,2022.00,37.64,2022.00,37.72,2022.00,,0.00,,0.00,0.70,0.15,0.10,0.55,0.00
+rtc,recent_max,inference_ms,0.40,49.70,1882.00,36.79,1882.00,36.86,1882.00,0.69,1882.00,45.44,1882.00,1.00,0.15,0.15,0.70,0.00
+wireless_rtc,recent_max,response_rtt_ms,0.41,49.74,1980.00,36.91,1980.00,36.98,1980.00,37.86,1980.00,37.86,1980.00,1.00,0.15,0.20,0.70,0.00

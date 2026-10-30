@@ -1,0 +1,11 @@
+{
+  "segment": "C:\\Users\\jack_\\OneDrive\\Desktop\\UT Austin\\CS386W\\project\\Wireless-RTC\\data\\commect\\unstable_segment.csv",
+  "segment_sha256": "18695e7f16dacad50810c9db856a05e83a31a9ee89050049bbd4658454d29564",
+  "source": "C:\\Users\\jack_\\OneDrive\\Desktop\\UT Austin\\CS386W\\project\\Wireless-RTC\\data\\commect\\measured.csv",
+  "samples": 535,
+  "history": 8,
+  "control_ms": 20,
+  "model": "C:\\Users\\jack_\\OneDrive\\Desktop\\UT Austin\\CS386W\\project\\Wireless-RTC\\runs\\qgb-commect-development-20261029-033441-817634Z\\model.pkl",
+  "model_sha256": "1ea751f4aeb1c3531e5db59a12e695aca35c428a0ffcd56523d38f2469793209",
+  "policy": "RTT-only, completed past history, no fitting, all segment rows scored; context rows not scored"
+}

@@ -1,0 +1,21 @@
+{
+  "task": "catcher_v3",
+  "method": "wireless_rtc",
+  "predictor": "rolling_p80",
+  "predictor_basis": "response_rtt_ms",
+  "episodes": 5,
+  "successes": 2,
+  "solve_rate": 0.4,
+  "buffer_exhaustion_steps": 40,
+  "deadline_overrun_steps": 1,
+  "average_rtt_ms": 42.24840744752734,
+  "rtt_samples": 94,
+  "average_injected_delay_ms": 0.0,
+  "injected_delay_samples": 94,
+  "average_delay_sleep_ms": 0.0,
+  "delay_sleep_samples": 94,
+  "prediction_mae_ms": 33.41993851453422,
+  "prediction_samples": 94,
+  "rtt_prediction_mae_ms": 33.41993851453422,
+  "rtt_prediction_samples": 94
+}

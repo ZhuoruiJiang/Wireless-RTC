@@ -1,0 +1,21 @@
+{
+  "task": "cartpole_thrust",
+  "method": "wireless_rtc",
+  "predictor": "rolling_p70",
+  "predictor_basis": "response_rtt_ms",
+  "episodes": 5,
+  "successes": 5,
+  "solve_rate": 1.0,
+  "buffer_exhaustion_steps": 0,
+  "deadline_overrun_steps": 0,
+  "average_rtt_ms": 12.5671547952376,
+  "rtt_samples": 73,
+  "average_injected_delay_ms": 0.0,
+  "injected_delay_samples": 73,
+  "average_delay_sleep_ms": 0.0,
+  "delay_sleep_samples": 73,
+  "prediction_mae_ms": 4.276937671796712,
+  "prediction_samples": 73,
+  "rtt_prediction_mae_ms": 4.276937671796712,
+  "rtt_prediction_samples": 73
+}

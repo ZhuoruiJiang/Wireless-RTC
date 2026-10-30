@@ -3,10 +3,9 @@ __pycache__/
 *.pyc
 *.egg-info/
 .uv-cache/
-checkpoints/
-runs/
-data/
 .env
+.env.*
+!.env.example
 
 .deps/
 .tmp/

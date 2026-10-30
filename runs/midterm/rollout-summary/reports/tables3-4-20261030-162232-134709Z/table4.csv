@@ -1,0 +1,4 @@
+setting,method,predictor,deadline_miss_pct,expired_response_pct,fallback_tick_pct,boundary_jump_p95
+weak,rtc,recent_max,26.94,2.09,16.94,1.32
+weak,wireless_rtc,recent_max,25.00,2.71,17.03,1.25
+weak,wireless_rtc,rolling_p95,23.19,2.48,16.92,1.42

@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "note": "Operator-confirmed stationary settings. Both outdoor runs, including 015059, are weak stationary Wi-Fi. Reporting labels override legacy labels without modifying source manifests or moving folders.",
+  "settings": {
+    "stable/test/network-characterize-20261030-022704-826585Z": "strong",
+    "stable/test/network-characterize-20261030-024150-413147Z": "strong",
+    "weak/test/network-characterize-20261030-064156-590640Z": "weak"
+  }
+}

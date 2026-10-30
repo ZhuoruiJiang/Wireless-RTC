@@ -1,0 +1,21 @@
+{
+  "task": "grasp_easy",
+  "method": "naive",
+  "predictor": "none",
+  "predictor_basis": "none",
+  "episodes": 20,
+  "successes": 14,
+  "solve_rate": 0.7,
+  "buffer_exhaustion_steps": 35,
+  "deadline_overrun_steps": 2,
+  "average_rtt_ms": 33.339021153481625,
+  "rtt_samples": 156,
+  "average_injected_delay_ms": 19.935897435897434,
+  "injected_delay_samples": 156,
+  "average_delay_sleep_ms": 20.01008699582412,
+  "delay_sleep_samples": 156,
+  "prediction_mae_ms": null,
+  "prediction_samples": 0,
+  "rtt_prediction_mae_ms": null,
+  "rtt_prediction_samples": 0
+}

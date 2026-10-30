@@ -1,0 +1,4 @@
+method,predictor,predictor_basis,average_solve_rate,average_rtt_ms,rtt_samples,average_injected_delay_ms,injected_delay_samples,average_delay_sleep_ms,delay_sleep_samples,prediction_mae_ms,prediction_samples,rtt_prediction_mae_ms,rtt_prediction_samples,cartpole_thrust
+naive,none,none,1.00,10.58,17.00,0.00,17.00,0.00,17.00,,0.00,,0.00,1.00
+rtc,recent_max,inference_ms,1.00,12.47,17.00,0.00,17.00,0.00,17.00,0.56,17.00,8.59,17.00,1.00
+wireless_rtc,rolling_p95,response_rtt_ms,1.00,11.86,16.00,0.00,16.00,0.00,16.00,5.45,16.00,5.45,16.00,1.00

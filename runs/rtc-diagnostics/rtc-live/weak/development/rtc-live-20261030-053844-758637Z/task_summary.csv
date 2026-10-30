@@ -1,0 +1,6 @@
+task,method,predictor,predictor_basis,episodes,successes,solve_rate,buffer_exhaustion_steps,deadline_overrun_steps,average_rtt_ms,rtt_samples,average_injected_delay_ms,injected_delay_samples,average_delay_sleep_ms,delay_sleep_samples,prediction_mae_ms,prediction_samples,rtt_prediction_mae_ms,rtt_prediction_samples
+grasp_easy,rtc,recent_max,inference_ms,20.00,20.00,1.00,462.00,4.00,76.71,272.00,0.00,272.00,0.00,272.00,0.42,272.00,72.72,272.00
+cartpole_thrust,rtc,recent_max,inference_ms,20.00,20.00,1.00,0.00,1.00,13.03,303.00,0.00,303.00,0.00,303.00,0.46,303.00,9.13,303.00
+catcher_v3,rtc,recent_max,inference_ms,20.00,14.00,0.70,205.00,3.00,36.96,368.00,0.00,368.00,0.00,368.00,0.47,368.00,32.83,368.00
+hard_lunar_lander,rtc,recent_max,inference_ms,20.00,11.00,0.55,86.00,3.00,35.26,231.00,0.00,231.00,0.00,231.00,0.44,231.00,31.42,231.00
+mjc_walker,rtc,recent_max,inference_ms,20.00,5.00,0.25,927.00,3.00,48.71,915.00,0.00,915.00,0.00,915.00,0.56,915.00,44.61,915.00

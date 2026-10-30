@@ -1,0 +1,21 @@
+{
+  "task": "hard_lunar_lander",
+  "method": "naive",
+  "predictor": "none",
+  "predictor_basis": "none",
+  "episodes": 20,
+  "successes": 13,
+  "solve_rate": 0.65,
+  "buffer_exhaustion_steps": 110,
+  "deadline_overrun_steps": 0,
+  "average_rtt_ms": 41.20426525412891,
+  "rtt_samples": 236,
+  "average_injected_delay_ms": 29.872881355932204,
+  "injected_delay_samples": 236,
+  "average_delay_sleep_ms": 29.956481783548213,
+  "delay_sleep_samples": 236,
+  "prediction_mae_ms": null,
+  "prediction_samples": 0,
+  "rtt_prediction_mae_ms": null,
+  "rtt_prediction_samples": 0
+}

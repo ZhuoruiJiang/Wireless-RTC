@@ -1,0 +1,423 @@
+{
+  "config": {
+    "seed": 42,
+    "episodes": 20,
+    "blocks": 1,
+    "tasks": [
+      "grasp_easy",
+      "cartpole_thrust",
+      "catcher_v3",
+      "hard_lunar_lander",
+      "mjc_walker"
+    ],
+    "control_ms": 20,
+    "min_execution_steps": 4,
+    "request_timeout_s": 10,
+    "require_no_injected_delay": true,
+    "wifi": {
+      "enabled": true,
+      "interface": "Wi-Fi",
+      "interval_ms": 1000
+    },
+    "methods": [
+      "rtc"
+    ],
+    "method_predictors": {
+      "rtc": [
+        "recent_max"
+      ]
+    },
+    "predictors": {
+      "recent_max": {
+        "kind": "max",
+        "window": 8,
+        "initial_ms": 60
+      }
+    }
+  },
+  "created_utc": "2026-10-30T05:38:44.779515+00:00",
+  "python": "3.11.17",
+  "git_commit": "b03cf5d4c8500da2e8bd683c2fd59b88ed82594c",
+  "upstream_commit": "9296f31d62d5bfeb5779dcb2f9bcf71ca37f448b",
+  "git_dirty": true,
+  "experiment": "rtc-diagnostics",
+  "setting": "weak",
+  "split": "development",
+  "kind": "pretrained_kinetix_live_rpc",
+  "status": "completed",
+  "host": "127.0.0.1",
+  "port": 8765,
+  "timeout": 120,
+  "tasks": {
+    "grasp_easy": {
+      "level": "worlds/l/grasp_easy.json",
+      "server": {
+        "request_id": 1,
+        "status": "ok",
+        "server_ms": 0.2792598679661751,
+        "protocol_version": 3,
+        "control_modes": {
+          "naive": "none",
+          "rtc": "inference_ms",
+          "wireless_rtc": "response_rtt_ms"
+        },
+        "available_tasks": [
+          "grasp_easy",
+          "cartpole_thrust",
+          "catcher_v3",
+          "hard_lunar_lander",
+          "mjc_walker"
+        ],
+        "active_task": "grasp_easy",
+        "task": "grasp_easy",
+        "horizon": 8,
+        "action_dim": 6,
+        "observation_dim": 679,
+        "level": "worlds/l/grasp_easy.json",
+        "level_sha256": "a1d41d62a35234ba2a1874d05a8a9a386bb35c4664fcf53d047fd7799e0071a5",
+        "checkpoint_sha256": "1a274db5022b405edaf2c8438b5d4a9d1f73847e9a32922aecbdca0b0230c01d",
+        "parameters": 3072006,
+        "jax_version": "0.4.35",
+        "devices": [
+          "cuda:0",
+          "cuda:1",
+          "cuda:2",
+          "cuda:3",
+          "cuda:4",
+          "cuda:5",
+          "cuda:6",
+          "cuda:7"
+        ],
+        "response_delay": {
+          "kind": "none"
+        }
+      },
+      "status": "completed",
+      "client_devices": [
+        "TFRT_CPU_0"
+      ],
+      "condition_order": [
+        "rtc-recent_max"
+      ],
+      "action_ranges": [
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0
+      ]
+    },
+    "cartpole_thrust": {
+      "level": "worlds/l/cartpole_thrust.json",
+      "server": {
+        "request_id": 294,
+        "status": "ok",
+        "server_ms": 0.330690061673522,
+        "protocol_version": 3,
+        "control_modes": {
+          "naive": "none",
+          "rtc": "inference_ms",
+          "wireless_rtc": "response_rtt_ms"
+        },
+        "available_tasks": [
+          "grasp_easy",
+          "cartpole_thrust",
+          "catcher_v3",
+          "hard_lunar_lander",
+          "mjc_walker"
+        ],
+        "active_task": "cartpole_thrust",
+        "task": "cartpole_thrust",
+        "horizon": 8,
+        "action_dim": 6,
+        "observation_dim": 679,
+        "level": "worlds/l/cartpole_thrust.json",
+        "level_sha256": "ac9a36a985b2232100366026866c11ccb7783f96ee453197c481253757e6be23",
+        "checkpoint_sha256": "4d2caeaeaf6887b92137ff4d6c33c41a4d67bfa24f1d23837162d94f988d11cd",
+        "parameters": 3072006,
+        "jax_version": "0.4.35",
+        "devices": [
+          "cuda:0",
+          "cuda:1",
+          "cuda:2",
+          "cuda:3",
+          "cuda:4",
+          "cuda:5",
+          "cuda:6",
+          "cuda:7"
+        ],
+        "response_delay": {
+          "kind": "none"
+        }
+      },
+      "status": "completed",
+      "client_devices": [
+        "TFRT_CPU_0"
+      ],
+      "condition_order": [
+        "rtc-recent_max"
+      ],
+      "action_ranges": [
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0
+      ]
+    },
+    "catcher_v3": {
+      "level": "worlds/l/catcher_v3.json",
+      "server": {
+        "request_id": 618,
+        "status": "ok",
+        "server_ms": 0.40214997716248035,
+        "protocol_version": 3,
+        "control_modes": {
+          "naive": "none",
+          "rtc": "inference_ms",
+          "wireless_rtc": "response_rtt_ms"
+        },
+        "available_tasks": [
+          "grasp_easy",
+          "cartpole_thrust",
+          "catcher_v3",
+          "hard_lunar_lander",
+          "mjc_walker"
+        ],
+        "active_task": "catcher_v3",
+        "task": "catcher_v3",
+        "horizon": 8,
+        "action_dim": 6,
+        "observation_dim": 679,
+        "level": "worlds/l/catcher_v3.json",
+        "level_sha256": "295e345ba2ae4933f60ed68f9fb02388075eef91fec748a892710d098cd652a3",
+        "checkpoint_sha256": "926d2d3821fb31be8cfa24532711efe52ba10d62786e332a48c5a20431b43c00",
+        "parameters": 3072006,
+        "jax_version": "0.4.35",
+        "devices": [
+          "cuda:0",
+          "cuda:1",
+          "cuda:2",
+          "cuda:3",
+          "cuda:4",
+          "cuda:5",
+          "cuda:6",
+          "cuda:7"
+        ],
+        "response_delay": {
+          "kind": "none"
+        }
+      },
+      "status": "completed",
+      "client_devices": [
+        "TFRT_CPU_0"
+      ],
+      "condition_order": [
+        "rtc-recent_max"
+      ],
+      "action_ranges": [
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0
+      ]
+    },
+    "hard_lunar_lander": {
+      "level": "worlds/l/hard_lunar_lander.json",
+      "server": {
+        "request_id": 1007,
+        "status": "ok",
+        "server_ms": 0.282469904050231,
+        "protocol_version": 3,
+        "control_modes": {
+          "naive": "none",
+          "rtc": "inference_ms",
+          "wireless_rtc": "response_rtt_ms"
+        },
+        "available_tasks": [
+          "grasp_easy",
+          "cartpole_thrust",
+          "catcher_v3",
+          "hard_lunar_lander",
+          "mjc_walker"
+        ],
+        "active_task": "hard_lunar_lander",
+        "task": "hard_lunar_lander",
+        "horizon": 8,
+        "action_dim": 6,
+        "observation_dim": 679,
+        "level": "worlds/l/hard_lunar_lander.json",
+        "level_sha256": "867e87f81b29bfaa2293a8956685c27a7aa697b04a280ded6714e9c6403cc40f",
+        "checkpoint_sha256": "bbeef45ba75fc5b411b563ee3a592abcf2290109f30c85e43071ebcc6c58063f",
+        "parameters": 3072006,
+        "jax_version": "0.4.35",
+        "devices": [
+          "cuda:0",
+          "cuda:1",
+          "cuda:2",
+          "cuda:3",
+          "cuda:4",
+          "cuda:5",
+          "cuda:6",
+          "cuda:7"
+        ],
+        "response_delay": {
+          "kind": "none"
+        }
+      },
+      "status": "completed",
+      "client_devices": [
+        "TFRT_CPU_0"
+      ],
+      "condition_order": [
+        "rtc-recent_max"
+      ],
+      "action_ranges": [
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0
+      ]
+    },
+    "mjc_walker": {
+      "level": "worlds/l/mjc_walker.json",
+      "server": {
+        "request_id": 1259,
+        "status": "ok",
+        "server_ms": 2547.668140847236,
+        "protocol_version": 3,
+        "control_modes": {
+          "naive": "none",
+          "rtc": "inference_ms",
+          "wireless_rtc": "response_rtt_ms"
+        },
+        "available_tasks": [
+          "grasp_easy",
+          "cartpole_thrust",
+          "catcher_v3",
+          "hard_lunar_lander",
+          "mjc_walker"
+        ],
+        "active_task": "mjc_walker",
+        "task": "mjc_walker",
+        "horizon": 8,
+        "action_dim": 6,
+        "observation_dim": 679,
+        "level": "worlds/l/mjc_walker.json",
+        "level_sha256": "ec439be32710102d66df2be05977f4a6881de9ce8884bb48af0c833cb3673043",
+        "checkpoint_sha256": "7c0f6afa298f7eb09a91e1355b9cd94823935ec0590fe94a3e3dbdac01dc98f6",
+        "parameters": 3072006,
+        "jax_version": "0.4.35",
+        "devices": [
+          "cuda:0",
+          "cuda:1",
+          "cuda:2",
+          "cuda:3",
+          "cuda:4",
+          "cuda:5",
+          "cuda:6",
+          "cuda:7"
+        ],
+        "response_delay": {
+          "kind": "none"
+        }
+      },
+      "status": "completed",
+      "client_devices": [
+        "TFRT_CPU_0"
+      ],
+      "condition_order": [
+        "rtc-recent_max"
+      ],
+      "action_ranges": [
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0
+      ]
+    }
+  },
+  "selected_tasks": [
+    "grasp_easy",
+    "cartpole_thrust",
+    "catcher_v3",
+    "hard_lunar_lander",
+    "mjc_walker"
+  ],
+  "rollout_metrics_version": 1,
+  "block": 1,
+  "blocks": 1,
+  "episodes_per_task_condition": 20,
+  "episode_offset": 0,
+  "conditions": [
+    {
+      "method": "rtc",
+      "predictor": "recent_max"
+    }
+  ],
+  "viewer": {
+    "enabled": false,
+    "fps": null
+  },
+  "timing": "Paced wall-clock simulation; RTT from submission through response validation",
+  "fallback": "Zero action while physics advances when the action buffer is exhausted",
+  "control_modes": {
+    "naive": "none",
+    "rtc": "inference_ms",
+    "wireless_rtc": "response_rtt_ms"
+  },
+  "wifi": {
+    "enabled": true,
+    "interface": "Wi-Fi",
+    "interval_ms": 1000
+  },
+  "server": {
+    "request_id": 0,
+    "status": "ok",
+    "server_ms": 0.2819499932229519,
+    "protocol_version": 3,
+    "control_modes": {
+      "naive": "none",
+      "rtc": "inference_ms",
+      "wireless_rtc": "response_rtt_ms"
+    },
+    "available_tasks": [
+      "grasp_easy",
+      "cartpole_thrust",
+      "catcher_v3",
+      "hard_lunar_lander",
+      "mjc_walker"
+    ],
+    "active_task": "hard_lunar_lander",
+    "task": "hard_lunar_lander",
+    "horizon": 8,
+    "action_dim": 6,
+    "observation_dim": 679,
+    "level": "worlds/l/hard_lunar_lander.json",
+    "level_sha256": "867e87f81b29bfaa2293a8956685c27a7aa697b04a280ded6714e9c6403cc40f",
+    "checkpoint_sha256": "bbeef45ba75fc5b411b563ee3a592abcf2290109f30c85e43071ebcc6c58063f",
+    "parameters": 3072006,
+    "jax_version": "0.4.35",
+    "devices": [
+      "cuda:0",
+      "cuda:1",
+      "cuda:2",
+      "cuda:3",
+      "cuda:4",
+      "cuda:5",
+      "cuda:6",
+      "cuda:7"
+    ],
+    "response_delay": {
+      "kind": "none"
+    }
+  }
+}

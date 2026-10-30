@@ -1,0 +1,3 @@
+setting,completed_requests,median_rssi_dbm,response_p50_ms,response_p95_ms
+strong,12863.00,-62.00,11.55,16.83
+weak,5237.00,-81.00,17.74,95.19

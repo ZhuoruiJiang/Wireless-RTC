@@ -1,0 +1,227 @@
+\documentclass[11pt]{article}
+\usepackage[margin=0.85in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs,tabularx,array}
+\usepackage{caption}
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
+\usepackage{enumitem}
+\usepackage{placeins}
+\setlist{nosep,leftmargin=*}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{5pt}
+\newcommand{\numplaceholder}{\textemdash}
+\newcommand{\resultplaceholder}{\textit{[To be completed after measurement.]}}
+\newcommand{\pending}{\textit{Pending}}
+\newcommand{\task}[1]{\texttt{#1}}
+\newcommand{\method}[1]{\texttt{#1}}
+\title{Wireless-Aware Real-Time Chunking\\Project Midterm Report Draft}
+\author{Tianrui Wang \and Zhuorui Jiang}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Real-Time Chunking (RTC) generates action chunks asynchronously while a controller executes previously available actions. Our project investigates whether estimating full policy-response latency improves remote control under different wireless connection conditions. This midterm evaluates last-response, recent-maximum, and rolling-quantile predictors at stationary locations with strong and weak Wi-Fi coverage. We measure forecast errors in milliseconds and control steps, task success, and controller disruptions on three Kinetix tasks. The experiment holds the policy, mask construction rule, and fallback fixed to isolate delay-estimator effects. Numerical results and their interpretation will be added after data collection. A Fugu-inspired MLP is reserved for subsequent work.
+\end{abstract}
+
+\section{Objective and Scope}
+Our proposal extends RTC by accounting for communication latency in addition to server inference time. The question for this midterm is:
+\begin{quote}
+How do simple causal response-time predictors trade off underprediction and excess frozen actions, and how does that tradeoff affect task success under strong and weak stationary Wi-Fi conditions?
+\end{quote}
+RTC uses a recent maximum to estimate delay and constructs a soft mask that maintains continuity with the previous action chunk~\cite{rtc}. We compare alternative estimates while retaining the same mask rule and zero-action fallback. Wireless telemetry characterizes the measured settings; the initial reported predictors use response history only. This stage does not establish the benefit of telemetry as a predictive input. Bandwidth prediction, a new fallback, and learned mask schedules are deferred.
+
+\section{System and Predictors}
+The client communicates with the policy server over a persistent TCP connection. In the current remote deployment, TCP application traffic is forwarded through an SSH tunnel. The measured response duration includes client dispatch, serialization, communication, server computation, and response processing. Server inference duration is logged separately.
+
+Let $T_i$ denote the full response duration for request $i$, and let $\hat T_i$ be a prediction made before submitting that request. Only earlier completed requests may enter its history. At the configured control interval $\Delta=20$ ms, define
+\[
+ k_i=\left\lceil T_i/\Delta\right\rceil,\qquad
+ \hat k_i=\left\lceil \hat T_i/\Delta\right\rceil.
+\]
+Predicted steps guide chunk generation; actual arrival determines which action indices remain usable. Forecast scores use the unclipped prediction. Applied prefix clipping is logged separately.
+
+\begin{itemize}
+\item \textbf{Last response:} $\hat T_i=T_{i-1}$.
+\item \textbf{Recent maximum:} maximum of the last $w$ completed responses.
+\item \textbf{Rolling p95:} empirical 95th percentile of the last $w$ completed responses, using linear interpolation between sorted observations.
+\end{itemize}
+The initial planned window is $w=8$. Any revision must be selected on development data and frozen before final testing. Use a common eight-response warmup for the primary forecast comparison and retain the excluded samples in the logs. Controller trials include their actual initialization behavior; forecasts during warmup are not silently removed from task outcomes.
+
+An existing \method{qgb\_rtt} checkpoint will be evaluated internally without retraining, using only eligible held-out data. Its results are excluded from the main tables. Fugu predicts transmission-time distributions with a supervised neural predictor~\cite{fugu}; a Fugu-inspired predictor adapted to policy-response timing is future work. Its table entries remain pending.
+
+\section{Experimental Protocol}
+\subsection{Wi-Fi Settings}
+We compare two stationary locations using the same laptop, server, policy workload, and request cadence:
+\begin{enumerate}
+\item \textbf{Strong Wi-Fi:} the laptop remains at a fixed location inside the dormitory with stronger measured signal.
+\item \textbf{Weak Wi-Fi:} the laptop remains at a fixed outdoor location near the student apartment with weaker measured signal.
+\end{enumerate}
+The labels describe relative measured RSSI for these locations, rather than universal signal thresholds. Record location, laptop placement, adapter, band/channel, association identifier (BSSID), and collection times. Automatic association changes are allowed and logged; the two locations need not share an access point. This is a comparison of real operating conditions, not an experiment that isolates signal strength from access-point load, band, or interference.
+
+Exploratory walking attempts encountered SSH disconnections. We therefore restrict the main comparison to stationary locations where sustained measurement is feasible. Completed mobility traces and interrupted attempts are retained separately and are not pooled into the weak stationary condition. This restriction limits conclusions about mobility and connection outages.
+
+The initial target is one held-out ten-minute run per setting, collected within the same broad time window; repeat each setting if time permits. With one run per setting, results are a preliminary session-level comparison. These same held-out traces populate Tables~\ref{tab:environment} and~\ref{tab:prediction}; no separate Table~\ref{tab:environment} collection is needed. Development measurements precede final evaluation. Additional early runs may be retained for later MLP training.
+
+\subsection{Control Tasks and Comparisons}
+We use \task{catcher\_v3}, \task{hard\_lunar\_lander}, and \task{mjc\_walker}. All methods use the same pretrained policies, control interval, chunk horizon, execution settings, and episode seed schedule. Artificial delay injection is disabled.
+
+Inference-only RTC uses the recent maximum of completed server inference durations. Wireless RTC uses full response durations with each reported predictor. Naive asynchronous execution provides the no-guidance baseline. The planned initial budget is 20 episodes per task, method, and setting, subject to a runtime pilot before final data collection. Record the actual completed counts; do not count interrupted runs as successful trials.
+
+Live comparisons run methods sequentially in short blocks with rotated order across repeated sessions, within the same broad time window. Simultaneous clients would introduce contention and are not used for this comparison. For each setting, keep the laptop at the same marked location and in a similar orientation throughout the trials. Common task seeds do not reproduce live network conditions.
+
+Measured-trace replay may additionally compare methods on exactly the same delay sequences and paired task seeds. Replay and live results must be labeled separately; neither substitutes for the other. A replay uses elapsed trace time to select the delay state, and must not assign radio measurements from future trace times to an earlier request. A stored sequence of observed application delays is a controlled replay input, not a reconstruction of the original network.
+
+\subsection{Measurement and Validity}
+Record each request's submission and completion timing, prediction, server inference duration, outcome, observation tick, arrival tick, and buffer coverage at submission. Record per-tick buffer exhaustion and local controller timing. Boundary action-jump calculation additionally requires the executed actions and chunk-switch markers. Disable the viewer during timing measurements.
+
+Compute latency summaries from completed requests and report timeout counts separately if nonzero. Timeouts are censored durations, not zero-delay samples. Any timeout handling or run termination must be disclosed. Preserve raw precision; round displayed results to two decimal places.
+
+\section{Network Characterization}
+Table~\ref{tab:environment} describes only the held-out measurements used for the forecast comparison. RSSI samples characterize the setting; low-rate radio polls must not be counted as independent per-request measurements.
+
+\begin{table}[htbp]
+\centering
+\caption{Held-out Wi-Fi measurements. Dashes are unmeasured numerical placeholders. Request counts include completed responses; failures are reported separately if present.}
+\label{tab:environment}
+\small
+\begin{tabularx}{\linewidth}{Xrrrr}
+\toprule
+Setting & Requests & Median RSSI & Response p50 & Response p95\\
+ & & (dBm) & (ms) & (ms)\\
+\midrule
+Strong Wi-Fi & \numplaceholder & \numplaceholder & \numplaceholder & \numplaceholder\\
+Weak Wi-Fi & 6111.00 & -83.00 & 12.83 & 50.69\\
+\bottomrule
+\end{tabularx}
+\end{table}
+\textbf{Preliminary observation.} The outdoor stationary run completed 6,111 successful requests over approximately ten minutes, with no recorded request errors. Median RSSI was $-83.00$ dBm; response p50/p95 were 12.83/50.69 ms. No BSSID changes were observed during this run. The strong-location measurements and comparative interpretation remain pending. Successful collection at this location does not establish robustness to the SSH failures encountered during exploratory walking.
+
+\section{Delay Prediction}
+We report milliseconds and the actual scheduling grid. Step MAE is
+\[
+ \mathrm{MAE}_{\mathrm{step}}=\frac{1}{N}\sum_i |\hat k_i-k_i|.
+\]
+It is not millisecond MAE divided by $\Delta$: rounding precedes differencing. The underprediction and overprediction rates are $100N^{-1}\sum_i\mathbf{1}[\hat k_i<k_i]$ and $100N^{-1}\sum_i\mathbf{1}[\hat k_i>k_i]$, respectively. Mean excess steps is $N^{-1}\sum_i\max(\hat k_i-k_i,0)$, including zero contributions. Mean predicted prefix is $N^{-1}\sum_i\hat k_i$ and has no unconditional preferred direction.
+
+All predictors use the same eight-response window and the same scored requests, with history reset at each session. Eight responses per session are excluded, yielding 12,847 scored requests for strong Wi-Fi and 11,904 for weak Wi-Fi. Table~\ref{tab:prediction} reports last response, recent maximum, and rolling p95. Additional rolling quantiles are retained in internal metrics for subsequent sensitivity analysis. These measurements precede the controller success comparison and do not establish a causal relationship between forecast errors and task success.
+
+\begin{table}[htbp]
+\centering
+\caption{Forecast quality on identical held-out requests within each setting. Lower error and excess are preferred, but prefix length must be interpreted alongside underprediction. The MLP is not evaluated in this stage.}
+\label{tab:prediction}
+\scriptsize
+\setlength{\tabcolsep}{4pt}
+\begin{tabularx}{\linewidth}{Xrrrrrr}
+\toprule
+Predictor & MAE & Step & Under & Over & Excess & Prefix\\
+ & (ms) & MAE & (\%) & (\%) & (steps) & (steps)\\
+\midrule
+\multicolumn{7}{l}{\textbf{Strong Wi-Fi}} \\
+Last response & 2.60 & 0.06 & 1.79 & 1.81 & 0.03 & 1.04 \\
+Recent maximum & 6.93 & 0.24 & 1.48 & 12.61 & 0.21 & 1.23 \\
+Rolling p95 & 5.39 & 0.16 & 1.55 & 8.27 & 0.14 & 1.15 \\
+Fugu-inspired MLP & \multicolumn{6}{c}{\textit{Pending}} \\
+\midrule
+\multicolumn{7}{l}{\textbf{Weak Wi-Fi}} \\
+Last response & 6.20 & 0.29 & 7.86 & 7.89 & 0.15 & 1.39 \\
+Recent maximum & 18.41 & 0.91 & 3.39 & 32.56 & 0.82 & 2.13 \\
+Rolling p95 & 14.21 & 0.68 & 3.70 & 25.30 & 0.59 & 1.88 \\
+Fugu-inspired MLP & \multicolumn{6}{c}{\textit{Pending}} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+\textbf{Results and interpretation.} Under weak Wi-Fi, rolling p95 reduces step overprediction from 32.56\% for recent maximum to 25.30\%, while step underprediction rises from 3.39\% to 3.70\%. Mean excess prefix falls from 0.82 to 0.59 steps. Last response has lower MAE (6.20 ms) but higher step underprediction (7.86\%). Under strong Wi-Fi, all three predictors have step underprediction below 2\%. These results identify different forecast tradeoffs; controller trials are needed to determine their effect on task success.
+
+\section{Task Success}
+For each setting, report the equal-weight average of task solve rates:
+\[
+ \bar S=\frac{1}{3}\sum_{j=1}^{3}\frac{s_j}{n_j},
+\]
+where $s_j$ and $n_j$ are successful and completed scored episodes for task $j$. Every compared method must include all three tasks. Retain per-task results. Report 95\% confidence intervals with the average, respecting repeated session or replay-trace grouping; with few sessions, describe estimates as preliminary.
+
+\begin{table}[htbp]
+\centering
+\caption{Average task success across the three selected tasks. Each numerical entry will be a percentage with a 95\% confidence interval. Evaluation type: \textit{[live or measured-trace replay; specify before filling]}.}
+\label{tab:success}
+\small
+\begin{tabularx}{\linewidth}{Xlll}
+\toprule
+Controller & Predictor & Strong Wi-Fi (\%) & Weak Wi-Fi (\%)\\
+\midrule
+Naive async & None & \numplaceholder & \numplaceholder\\
+Inference-only RTC & Recent max & \numplaceholder & \numplaceholder\\
+Wireless RTC & Last response & \numplaceholder & \numplaceholder\\
+Wireless RTC & Recent max & \numplaceholder & \numplaceholder\\
+Wireless RTC & Rolling p95 & \numplaceholder & \numplaceholder\\
+Wireless RTC & Fugu-inspired MLP & \pending & \pending\\
+\bottomrule
+\end{tabularx}
+\end{table}
+\textbf{Completed episodes per task/method/setting:} \numplaceholder.
+\par\textbf{Results and interpretation.} \resultplaceholder
+
+\section{Controller Behavior}
+Table~\ref{tab:controller} is computed from the same episodes as Table~\ref{tab:success}, with no additional trials.
+\begin{itemize}
+\item \textbf{Buffer deadline misses:} percentage of eligible requests whose usable response is unavailable by exhaustion of the action coverage present at submission. A response applied exactly at the first uncovered tick is on time. Include failures that cross this deadline; requests censored by episode termination before their deadline are excluded and counted separately.
+\item \textbf{Expired responses:} percentage of successful responses consumed during an episode whose age is at least the chunk horizon, leaving no valid action indices. Responses drained only after episode termination are excluded and counted separately.
+\item \textbf{Fallback ticks:} percentage of executed control ticks without valid buffered actions. The current fallback executes zero action while physics advances.
+\item \textbf{Boundary action jump:} the p95 of $\| (a_t-a_{t-1})/(a_{\max}-a_{\min})\|_2$ at switches between valid chunks, using componentwise normalization and omitting fixed-range components. Report the arithmetic mean of per-task p95 values; do not pool incompatible action spaces. Transitions involving fallback are excluded from this particular metric. Tasks with no valid boundaries have an unavailable value, not zero.
+\end{itemize}
+Compute the percentage metrics within each task, then average equally across the three tasks. Retain event counts and denominators in the raw summaries. A low jump does not establish effective control without task success. Prediction underestimation, a buffer deadline miss, chunk expiration, and task failure are distinct events. Local controller overruns and applied-prefix clipping are retained as diagnostic checks.
+
+\begin{table}[htbp]
+\centering
+\caption{Controller behavior from the task-success episodes. Lower is preferred. Jump denotes the average of per-task p95 normalized boundary jumps. Evaluation type matches Table~\ref{tab:success}.}
+\label{tab:controller}
+\small
+\begin{tabularx}{\linewidth}{Xrrrr}
+\toprule
+Method & Deadline & Expired & Fallback & Boundary\\
+ & misses (\%) & (\%) & ticks (\%) & jump\\
+\midrule
+\multicolumn{5}{l}{\textbf{Strong Wi-Fi}}\\
+RTC + recent max & \numplaceholder & \numplaceholder & \numplaceholder & \numplaceholder\\
+Wireless RTC + recent max & \numplaceholder & \numplaceholder & \numplaceholder & \numplaceholder\\
+Wireless RTC + rolling p95 & \numplaceholder & \numplaceholder & \numplaceholder & \numplaceholder\\
+Wireless RTC + MLP & \multicolumn{4}{c}{\pending}\\
+\midrule
+\multicolumn{5}{l}{\textbf{Weak Wi-Fi}}\\
+RTC + recent max & \numplaceholder & \numplaceholder & \numplaceholder & \numplaceholder\\
+Wireless RTC + recent max & \numplaceholder & \numplaceholder & \numplaceholder & \numplaceholder\\
+Wireless RTC + rolling p95 & \numplaceholder & \numplaceholder & \numplaceholder & \numplaceholder\\
+Wireless RTC + MLP & \multicolumn{4}{c}{\pending}\\
+\bottomrule
+\end{tabularx}
+\end{table}
+\textbf{Results and interpretation.} \resultplaceholder
+\FloatBarrier
+
+\section{Limitations and Next Steps}
+One day of measurements at two stationary locations supports a local pilot comparison, not generalization across campus networks or days. The study does not evaluate sustained mobility or recovery from broken SSH connections. Access point, band, and other link conditions may differ between locations, so differences cannot be attributed to RSSI alone. Similar latency conditions, few deadline events, and control-step quantization can limit observable differences. Statistical uncertainty and incomplete runs must remain visible.
+
+After completing the heuristic experiments, evaluate the Fugu-inspired predictor on fresh held-out data. Data already inspected to develop that model cannot be reused as untouched final test data. Preserve the existing QGB checkpoint as an internal reference. Telemetry-based prediction, bandwidth estimation, and a smooth fallback remain subsequent work.
+
+\section{Conclusion}
+\resultplaceholder
+
+\begin{thebibliography}{9}
+\bibitem{rtc}
+K. Black, M. Y. Galliker, and S. Levine.
+\textit{Real-Time Execution of Action Chunking Flow Policies}.
+2025.
+\url{https://www.physicalintelligence.company/download/real_time_chunking.pdf}
+
+\bibitem{fugu}
+F. Y. Yan et al.
+\textit{Learning in situ: a randomized experiment in video streaming}.
+USENIX NSDI, pp. 495--511, 2020.
+\url{https://www.usenix.org/conference/nsdi20/presentation/yan}
+\end{thebibliography}
+\end{document}

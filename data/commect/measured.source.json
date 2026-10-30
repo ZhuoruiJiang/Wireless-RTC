@@ -1,0 +1,22 @@
+{
+  "source": "https://zenodo.org/records/16919305",
+  "source_mat_sha256": "5cc781d69e41c05c30c152f9d9fdc09657cd0d995ad5afaba2dd407ac72c5123",
+  "reader": "mat-io==0.6.3",
+  "rtt_unit": "ms",
+  "snr_unit": "dB",
+  "sessions": {
+    "cellular_latency_mobility": {
+      "rows": 46311,
+      "failed_rtt_rows": 0,
+      "missing_snr_rows": 0
+    },
+    "cellular_latency_static": {
+      "rows": 35824,
+      "failed_rtt_rows": 0,
+      "missing_snr_rows": 0
+    }
+  },
+  "timestamp_policy": "milliseconds relative to first source timestamp within each session; original order retained",
+  "filtering": "no samples removed; failed RTTs remain explicit error rows",
+  "csv_sha256": "cf5a7b4ec3f3e96e702c3a109ee182bde73a287a5ddcf24515c73a9987464624"
+}

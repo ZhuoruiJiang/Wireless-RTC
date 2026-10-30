@@ -1,0 +1,13 @@
+{
+  "segment": "C:\\Users\\jack_\\OneDrive\\Desktop\\UT Austin\\CS386W\\project\\Wireless-RTC\\data\\commect\\measured.csv",
+  "segment_sha256": "cf5a7b4ec3f3e96e702c3a109ee182bde73a287a5ddcf24515c73a9987464624",
+  "source": "C:\\Users\\jack_\\OneDrive\\Desktop\\UT Austin\\CS386W\\project\\Wireless-RTC\\data\\commect\\measured.csv",
+  "requested_samples": 82135,
+  "samples": 82119,
+  "skipped_warmup_samples": 16,
+  "history": 8,
+  "control_ms": 20,
+  "model": null,
+  "model_sha256": null,
+  "policy": "RTT-only, completed past history, no fitting; initial per-session history warmup excluded and counted"
+}

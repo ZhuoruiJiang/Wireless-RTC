@@ -1,0 +1,21 @@
+{
+  "task": "mjc_walker",
+  "method": "wireless_rtc",
+  "predictor": "rolling_p90",
+  "predictor_basis": "response_rtt_ms",
+  "episodes": 5,
+  "successes": 5,
+  "solve_rate": 1.0,
+  "buffer_exhaustion_steps": 0,
+  "deadline_overrun_steps": 0,
+  "average_rtt_ms": 14.945633467915844,
+  "rtt_samples": 248,
+  "average_injected_delay_ms": 0.0,
+  "injected_delay_samples": 248,
+  "average_delay_sleep_ms": 0.0,
+  "delay_sleep_samples": 248,
+  "prediction_mae_ms": 10.762517982502393,
+  "prediction_samples": 248,
+  "rtt_prediction_mae_ms": 10.762517982502393,
+  "rtt_prediction_samples": 248
+}

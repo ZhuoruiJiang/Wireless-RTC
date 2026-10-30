@@ -1,0 +1,88 @@
+{
+  "table": [
+    {
+      "setting": "strong",
+      "completed_requests": 12863,
+      "median_rssi_dbm": -62.0,
+      "response_p50_ms": 11.5519,
+      "response_p95_ms": 16.82501
+    },
+    {
+      "setting": "weak",
+      "completed_requests": 11920,
+      "median_rssi_dbm": -82.0,
+      "response_p50_ms": 12.9817,
+      "response_p95_ms": 53.902634999999954
+    }
+  ],
+  "audits": {
+    "strong": {
+      "failed_requests": 0,
+      "wifi_polls": 1088,
+      "valid_rssi_polls": 1088
+    },
+    "weak": {
+      "failed_requests": 0,
+      "wifi_polls": 1077,
+      "valid_rssi_polls": 1071
+    }
+  },
+  "included_runs": [
+    "C:\\Users\\jack_\\OneDrive\\Desktop\\UT Austin\\CS386W\\project\\Wireless-RTC\\runs\\midterm\\network-characterization\\stable\\test\\network-characterize-20261030-022704-826585Z",
+    "C:\\Users\\jack_\\OneDrive\\Desktop\\UT Austin\\CS386W\\project\\Wireless-RTC\\runs\\midterm\\network-characterization\\stable\\test\\network-characterize-20261030-024150-413147Z",
+    "C:\\Users\\jack_\\OneDrive\\Desktop\\UT Austin\\CS386W\\project\\Wireless-RTC\\runs\\midterm\\network-characterization\\weak\\test\\network-characterize-20261030-015059-164952Z",
+    "C:\\Users\\jack_\\OneDrive\\Desktop\\UT Austin\\CS386W\\project\\Wireless-RTC\\runs\\midterm\\network-characterization\\weak\\test\\network-characterize-20261030-020233-934624Z"
+  ],
+  "excluded_runs": [],
+  "split": "test",
+  "workload": "policy",
+  "comparison_signature": {
+    "host": "127.0.0.1",
+    "interval_ms": 80,
+    "port": 8765,
+    "warmup_requests": 5,
+    "wifi_enabled": true,
+    "wifi_interval_ms": 1000,
+    "workload": {
+      "checkpoint_sha256": "4d2caeaeaf6887b92137ff4d6c33c41a4d67bfa24f1d23837162d94f988d11cd",
+      "horizon": 8,
+      "level_sha256": "ac9a36a985b2232100366026866c11ccb7783f96ee453197c481253757e6be23",
+      "note": "Fixed reset observation and initial previous chunk; not a control rollout",
+      "observation_sha256": "4754d18513de5f2c35f565d49010124e327e6e6b1fa4ea7e6ddf344e622cbf6f",
+      "overlap_steps": 4,
+      "predicted_steps": 1,
+      "seed": 42,
+      "task": "cartpole_thrust",
+      "workload": "policy"
+    }
+  },
+  "requested_settings": [
+    "strong",
+    "weak"
+  ],
+  "missing_settings": [],
+  "session_map": "C:\\Users\\jack_\\OneDrive\\Desktop\\UT Austin\\CS386W\\project\\Wireless-RTC\\runs\\midterm\\network-characterization\\session_map.json",
+  "session_assignments": [
+    {
+      "path": "C:\\Users\\jack_\\OneDrive\\Desktop\\UT Austin\\CS386W\\project\\Wireless-RTC\\runs\\midterm\\network-characterization\\stable\\test\\network-characterize-20261030-022704-826585Z",
+      "saved_setting": "stationary",
+      "report_setting": "strong"
+    },
+    {
+      "path": "C:\\Users\\jack_\\OneDrive\\Desktop\\UT Austin\\CS386W\\project\\Wireless-RTC\\runs\\midterm\\network-characterization\\stable\\test\\network-characterize-20261030-024150-413147Z",
+      "saved_setting": "stationary",
+      "report_setting": "strong"
+    },
+    {
+      "path": "C:\\Users\\jack_\\OneDrive\\Desktop\\UT Austin\\CS386W\\project\\Wireless-RTC\\runs\\midterm\\network-characterization\\weak\\test\\network-characterize-20261030-015059-164952Z",
+      "saved_setting": "walking",
+      "report_setting": "weak"
+    },
+    {
+      "path": "C:\\Users\\jack_\\OneDrive\\Desktop\\UT Austin\\CS386W\\project\\Wireless-RTC\\runs\\midterm\\network-characterization\\weak\\test\\network-characterize-20261030-020233-934624Z",
+      "saved_setting": "weak",
+      "report_setting": "weak"
+    }
+  ],
+  "note": "Pooled successful requests and independent radio polls within setting; no cross-setting average"
+}

@@ -1,0 +1,118 @@
+{
+  "schema_version": 1,
+  "kind": "quantile_gradient_boosting",
+  "evaluation_partition": "validation",
+  "implementation": "sklearn.HistGradientBoostingRegressor",
+  "sklearn": "1.9.1",
+  "numpy": "1.26.4",
+  "python": "3.11.17",
+  "config": {
+    "history": 8,
+    "quantiles": [
+      0.5,
+      0.8,
+      0.95
+    ],
+    "feature_sets": [
+      "rtt"
+    ],
+    "split_mode": "chronological",
+    "train_fraction": 0.6,
+    "validation_fraction": 0.2,
+    "max_gap_ms": 10000,
+    "control_ms": 20,
+    "seed": 42,
+    "parameter_grid": [
+      {
+        "max_iter": 150,
+        "max_leaf_nodes": 7,
+        "min_samples_leaf": 10,
+        "learning_rate": 0.05,
+        "l2_regularization": 1.0
+      },
+      {
+        "max_iter": 150,
+        "max_leaf_nodes": 15,
+        "min_samples_leaf": 20,
+        "learning_rate": 0.05,
+        "l2_regularization": 1.0
+      }
+    ]
+  },
+  "inputs": [
+    {
+      "path": "C:\\Users\\jack_\\OneDrive\\Desktop\\UT Austin\\CS386W\\project\\Wireless-RTC\\data\\commect\\measured.csv",
+      "sha256": "cf5a7b4ec3f3e96e702c3a109ee182bde73a287a5ddcf24515c73a9987464624"
+    }
+  ],
+  "selected_candidates": {
+    "rtt": 1
+  },
+  "candidates": [
+    {
+      "feature_set": "rtt",
+      "candidate": 0,
+      "validation_mean_pinball_ms": 4.000431176210048,
+      "parameters": {
+        "max_iter": 150,
+        "max_leaf_nodes": 7,
+        "min_samples_leaf": 10,
+        "learning_rate": 0.05,
+        "l2_regularization": 1.0
+      }
+    },
+    {
+      "feature_set": "rtt",
+      "candidate": 1,
+      "validation_mean_pinball_ms": 3.8731582996588574,
+      "parameters": {
+        "max_iter": 150,
+        "max_leaf_nodes": 15,
+        "min_samples_leaf": 20,
+        "learning_rate": 0.05,
+        "l2_regularization": 1.0
+      }
+    }
+  ],
+  "audits": {
+    "train": {
+      "records": 49280,
+      "failed_records": 0,
+      "warmup_records": 16,
+      "gap_resets": 0,
+      "examples": 49264
+    },
+    "validation": {
+      "records": 16427,
+      "failed_records": 0,
+      "warmup_records": 16,
+      "gap_resets": 0,
+      "examples": 16411
+    }
+  },
+  "feature_names": {
+    "rtt": [
+      "rtt_lag_1_ms",
+      "rtt_lag_2_ms",
+      "rtt_lag_3_ms",
+      "rtt_lag_4_ms",
+      "rtt_lag_5_ms",
+      "rtt_lag_6_ms",
+      "rtt_lag_7_ms",
+      "rtt_lag_8_ms",
+      "rtt_median_ms",
+      "rtt_mean_ms",
+      "rtt_std_ms",
+      "rtt_p95_ms",
+      "rtt_max_ms",
+      "rtt_trend_ms",
+      "last_sample_interval_ms",
+      "history_duration_ms"
+    ]
+  },
+  "training_seconds": 6.54432739999902,
+  "target": "next successful measured RTT; failures reset history and are reported separately",
+  "features": "strictly earlier completed records; current target SNR is excluded",
+  "test_policy": "No test scores calculated during model selection; no refit on validation",
+  "quantile_postprocessing": "clip to nonnegative and sort quantiles in increasing order"
+}

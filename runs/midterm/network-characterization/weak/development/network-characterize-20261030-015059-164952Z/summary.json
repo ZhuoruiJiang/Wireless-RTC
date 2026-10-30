@@ -1,0 +1,26 @@
+{
+  "setting": "walking",
+  "split": "test",
+  "status": "complete",
+  "workload": {
+    "workload": "policy",
+    "task": "cartpole_thrust",
+    "seed": 42,
+    "horizon": 8,
+    "level_sha256": "ac9a36a985b2232100366026866c11ccb7783f96ee453197c481253757e6be23",
+    "checkpoint_sha256": "4d2caeaeaf6887b92137ff4d6c33c41a4d67bfa24f1d23837162d94f988d11cd",
+    "observation_sha256": "4754d18513de5f2c35f565d49010124e327e6e6b1fa4ea7e6ddf344e622cbf6f",
+    "predicted_steps": 1,
+    "overlap_steps": 4,
+    "note": "Fixed reset observation and initial previous chunk; not a control rollout"
+  },
+  "requests": 5809,
+  "completed_requests": 5809,
+  "failed_requests": 0,
+  "median_rssi_dbm": -78.0,
+  "response_p50_ms": 13.2087,
+  "response_p95_ms": 57.07117999999994,
+  "wifi_polls": 540,
+  "valid_rssi_polls": 534,
+  "note": "Percentiles condition on successful responses; RSSI uses independent poll records, not request joins"
+}

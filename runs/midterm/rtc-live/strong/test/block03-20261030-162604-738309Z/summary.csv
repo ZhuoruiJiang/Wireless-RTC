@@ -1,0 +1,10 @@
+method,predictor,predictor_basis,average_solve_rate,average_rtt_ms,rtt_samples,average_injected_delay_ms,injected_delay_samples,average_delay_sleep_ms,delay_sleep_samples,prediction_mae_ms,prediction_samples,rtt_prediction_mae_ms,rtt_prediction_samples,catcher_v3,hard_lunar_lander,mjc_walker
+naive,none,none,0.87,13.01,390.00,0.00,390.00,0.00,390.00,,0.00,,0.00,0.80,1.00,0.80
+rtc,recent_max,inference_ms,0.80,14.47,397.00,0.00,397.00,0.00,397.00,0.56,397.00,10.34,397.00,0.80,0.80,0.80
+wireless_rtc,last_response,response_rtt_ms,0.73,15.13,419.00,0.00,419.00,0.00,419.00,7.75,419.00,7.75,419.00,0.80,0.80,0.60
+wireless_rtc,recent_max,response_rtt_ms,0.67,14.59,399.00,0.00,399.00,0.00,399.00,22.54,399.00,22.54,399.00,0.60,1.00,0.40
+wireless_rtc,rolling_p50,response_rtt_ms,0.80,14.54,401.00,0.00,401.00,0.00,401.00,4.70,401.00,4.70,401.00,0.80,1.00,0.60
+wireless_rtc,rolling_p70,response_rtt_ms,0.67,14.69,417.00,0.00,417.00,0.00,417.00,5.30,417.00,5.30,417.00,0.80,1.00,0.20
+wireless_rtc,rolling_p80,response_rtt_ms,0.80,14.44,404.00,0.00,404.00,0.00,404.00,5.51,404.00,5.51,404.00,0.80,1.00,0.60
+wireless_rtc,rolling_p90,response_rtt_ms,0.67,14.36,399.00,0.00,399.00,0.00,399.00,10.66,399.00,10.66,399.00,0.60,1.00,0.40
+wireless_rtc,rolling_p95,response_rtt_ms,0.80,14.32,412.00,0.00,412.00,0.00,412.00,16.01,412.00,16.01,412.00,0.80,1.00,0.60

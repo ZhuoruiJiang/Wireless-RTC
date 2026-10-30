@@ -1,0 +1,11 @@
+setting,method,predictor,tasks,blocks,episodes_per_task,success_pct,success_ci_low_pct,success_ci_high_pct
+strong,naive,none,2.00,4.00,20.00,80.00,72.50,87.50
+strong,rtc,recent_max,2.00,4.00,20.00,92.50,85.00,100.00
+strong,wireless_rtc,last_response,2.00,4.00,20.00,90.00,77.50,100.00
+strong,wireless_rtc,recent_max,2.00,4.00,20.00,92.50,90.00,97.50
+strong,wireless_rtc,rolling_p95,2.00,4.00,20.00,92.50,90.00,97.50
+weak,naive,none,2.00,4.00,20.00,42.50,30.00,55.00
+weak,rtc,recent_max,2.00,4.00,20.00,32.50,17.50,45.00
+weak,wireless_rtc,last_response,2.00,4.00,20.00,45.00,15.00,70.00
+weak,wireless_rtc,recent_max,2.00,4.00,20.00,55.00,50.00,65.00
+weak,wireless_rtc,rolling_p95,2.00,4.00,20.00,45.00,27.50,57.50

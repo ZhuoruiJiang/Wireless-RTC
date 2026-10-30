@@ -1,0 +1,7 @@
+setting,predictor,mae_ms,step_mae,step_underprediction_pct,step_overprediction_pct,mean_excess_steps,mean_prefix_steps
+strong,last_response,2.60,0.06,1.79,1.81,0.03,1.04
+strong,recent_max,6.93,0.24,1.48,12.61,0.21,1.23
+strong,rolling_p95,5.39,0.16,1.55,8.27,0.14,1.15
+weak,last_response,6.20,0.29,7.86,7.89,0.15,1.39
+weak,recent_max,18.41,0.91,3.39,32.56,0.82,2.13
+weak,rolling_p95,14.21,0.68,3.70,25.30,0.59,1.88

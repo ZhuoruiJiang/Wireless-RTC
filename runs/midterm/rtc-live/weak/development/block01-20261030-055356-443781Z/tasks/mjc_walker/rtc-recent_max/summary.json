@@ -1,0 +1,21 @@
+{
+  "task": "mjc_walker",
+  "method": "rtc",
+  "predictor": "recent_max",
+  "predictor_basis": "inference_ms",
+  "episodes": 5,
+  "successes": 2,
+  "solve_rate": 0.4,
+  "buffer_exhaustion_steps": 121,
+  "deadline_overrun_steps": 1,
+  "average_rtt_ms": 40.43559821496144,
+  "rtt_samples": 224,
+  "average_injected_delay_ms": 0.0,
+  "injected_delay_samples": 224,
+  "average_delay_sleep_ms": 0.0,
+  "delay_sleep_samples": 224,
+  "prediction_mae_ms": 0.8326043576484413,
+  "prediction_samples": 224,
+  "rtt_prediction_mae_ms": 35.83977402818813,
+  "rtt_prediction_samples": 224
+}

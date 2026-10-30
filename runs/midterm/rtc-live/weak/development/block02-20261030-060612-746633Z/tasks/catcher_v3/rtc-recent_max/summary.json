@@ -1,0 +1,21 @@
+{
+  "task": "catcher_v3",
+  "method": "rtc",
+  "predictor": "recent_max",
+  "predictor_basis": "inference_ms",
+  "episodes": 5,
+  "successes": 5,
+  "solve_rate": 1.0,
+  "buffer_exhaustion_steps": 6,
+  "deadline_overrun_steps": 0,
+  "average_rtt_ms": 18.814005681964442,
+  "rtt_samples": 88,
+  "average_injected_delay_ms": 0.0,
+  "injected_delay_samples": 88,
+  "average_delay_sleep_ms": 0.0,
+  "delay_sleep_samples": 88,
+  "prediction_mae_ms": 0.6188770004717464,
+  "prediction_samples": 88,
+  "rtt_prediction_mae_ms": 14.869291586034127,
+  "rtt_prediction_samples": 88
+}

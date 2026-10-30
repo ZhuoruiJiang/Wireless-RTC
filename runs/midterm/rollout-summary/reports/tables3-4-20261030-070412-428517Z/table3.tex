@@ -1,0 +1,12 @@
+\begin{tabular}{llrr}
+\toprule
+Controller & Predictor & Strong (\%) & Weak (\%) \\
+\midrule
+naive & none & 80.00 [72.50, 87.50] & 42.50 [30.00, 55.00] \\
+rtc & recent\_max & 92.50 [85.00, 100.00] & 32.50 [17.50, 45.00] \\
+wireless\_rtc & last\_response & 90.00 [77.50, 100.00] & 45.00 [15.00, 70.00] \\
+wireless\_rtc & recent\_max & 92.50 [90.00, 97.50] & 55.00 [50.00, 65.00] \\
+wireless\_rtc & rolling\_p95 & 92.50 [90.00, 97.50] & 45.00 [27.50, 57.50] \\
+Wireless RTC & MLP & \multicolumn{2}{c}{\textit{Pending}} \\
+\bottomrule
+\end{tabular}

@@ -1,0 +1,16 @@
+task,method,predictor,predictor_basis,episodes,successes,solve_rate,buffer_exhaustion_steps,deadline_overrun_steps,average_rtt_ms,rtt_samples,average_injected_delay_ms,injected_delay_samples,average_delay_sleep_ms,delay_sleep_samples,prediction_mae_ms,prediction_samples,rtt_prediction_mae_ms,rtt_prediction_samples
+grasp_easy,naive,none,none,20.00,14.00,0.70,35.00,2.00,33.34,156.00,19.94,156.00,20.01,156.00,,0.00,,0.00
+grasp_easy,rtc,recent_max,inference_ms,20.00,20.00,1.00,13.00,0.00,28.74,165.00,15.82,165.00,15.88,165.00,1.48,165.00,23.97,165.00
+grasp_easy,wireless_rtc,recent_max,response_rtt_ms,20.00,20.00,1.00,13.00,0.00,30.24,169.00,17.28,169.00,17.35,169.00,13.54,169.00,13.54,169.00
+cartpole_thrust,naive,none,none,20.00,3.00,0.15,168.00,1.00,47.14,284.00,35.74,284.00,35.82,284.00,,0.00,,0.00
+cartpole_thrust,rtc,recent_max,inference_ms,20.00,3.00,0.15,175.00,0.00,47.63,278.00,35.07,278.00,35.14,278.00,0.60,278.00,43.65,278.00
+cartpole_thrust,wireless_rtc,recent_max,response_rtt_ms,20.00,3.00,0.15,169.00,0.00,47.27,273.00,34.62,273.00,34.68,273.00,23.72,273.00,23.72,273.00
+catcher_v3,naive,none,none,20.00,2.00,0.10,217.00,2.00,48.68,321.00,37.31,321.00,37.38,321.00,,0.00,,0.00
+catcher_v3,rtc,recent_max,inference_ms,20.00,3.00,0.15,234.00,0.00,50.13,322.00,37.50,322.00,37.58,322.00,0.61,322.00,46.06,322.00
+catcher_v3,wireless_rtc,recent_max,response_rtt_ms,20.00,4.00,0.20,242.00,0.00,49.84,322.00,37.11,322.00,37.18,322.00,28.11,322.00,28.11,322.00
+hard_lunar_lander,naive,none,none,20.00,11.00,0.55,97.00,2.00,39.72,231.00,28.68,231.00,28.75,231.00,,0.00,,0.00
+hard_lunar_lander,rtc,recent_max,inference_ms,20.00,14.00,0.70,94.00,0.00,40.39,221.00,27.38,221.00,27.45,221.00,0.33,221.00,36.38,221.00
+hard_lunar_lander,wireless_rtc,recent_max,response_rtt_ms,20.00,14.00,0.70,98.00,0.00,41.11,225.00,28.33,225.00,28.40,225.00,20.59,225.00,20.59,225.00
+mjc_walker,naive,none,none,20.00,0.00,0.00,970.00,3.00,54.58,1030.00,42.97,1030.00,43.04,1030.00,,0.00,,0.00
+mjc_walker,rtc,recent_max,inference_ms,20.00,0.00,0.00,881.00,0.00,56.34,896.00,43.25,896.00,43.33,896.00,0.68,896.00,51.97,896.00
+mjc_walker,wireless_rtc,recent_max,response_rtt_ms,20.00,0.00,0.00,978.00,0.00,55.67,991.00,42.77,991.00,42.84,991.00,53.00,991.00,53.00,991.00

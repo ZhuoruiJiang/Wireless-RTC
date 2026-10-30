@@ -1,0 +1,8 @@
+{
+  "source": "https://zenodo.org/records/16919305",
+  "url": "https://zenodo.org/records/16919305/files/dataset.zip?download=1",
+  "md5": "bf80eee0f22dd5bcee2ad092031cffd1",
+  "sha256": "b6999fe66f7231dc0449c138b26c89eb3c4ee3948a745aaa7746690360307928",
+  "measurement_type": "real cellular/satellite measurements",
+  "note": "Export a cellular MATLAB table to CSV before training; not Wi-Fi control data"
+}

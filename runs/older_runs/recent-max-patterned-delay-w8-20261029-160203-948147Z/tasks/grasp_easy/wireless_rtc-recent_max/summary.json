@@ -1,0 +1,21 @@
+{
+  "task": "grasp_easy",
+  "method": "wireless_rtc",
+  "predictor": "recent_max",
+  "predictor_basis": "response_rtt_ms",
+  "episodes": 20,
+  "successes": 20,
+  "solve_rate": 1.0,
+  "buffer_exhaustion_steps": 13,
+  "deadline_overrun_steps": 0,
+  "average_rtt_ms": 30.24058934869782,
+  "rtt_samples": 169,
+  "average_injected_delay_ms": 17.27810650887574,
+  "injected_delay_samples": 169,
+  "average_delay_sleep_ms": 17.347049920064723,
+  "delay_sleep_samples": 169,
+  "prediction_mae_ms": 13.537092899856125,
+  "prediction_samples": 169,
+  "rtt_prediction_mae_ms": 13.537092899856125,
+  "rtt_prediction_samples": 169
+}

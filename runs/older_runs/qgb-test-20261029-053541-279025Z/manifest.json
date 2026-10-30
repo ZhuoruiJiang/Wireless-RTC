@@ -1,0 +1,21 @@
+{
+  "kind": "frozen_quantile_model_test",
+  "inputs": [
+    {
+      "path": "C:\\Users\\jack_\\OneDrive\\Desktop\\UT Austin\\CS386W\\project\\Wireless-RTC\\data\\commect\\measured.csv",
+      "sha256": "cf5a7b4ec3f3e96e702c3a109ee182bde73a287a5ddcf24515c73a9987464624"
+    }
+  ],
+  "partition": "test",
+  "audit": {
+    "records": 16428,
+    "failed_records": 0,
+    "warmup_records": 16,
+    "gap_resets": 0,
+    "examples": 16412
+  },
+  "model_path": "C:\\Users\\jack_\\OneDrive\\Desktop\\UT Austin\\CS386W\\project\\Wireless-RTC\\runs\\qgb-20261029-052828-362342Z\\model.pkl",
+  "model_sha256": "006c668a4a92f7c79bdfb1bbb41accb3d6cccc0da477b8cb596a62db8d17068a",
+  "snr_observed_history_fraction": 1,
+  "update_policy": "Weights frozen; features may use completed earlier RTTs within the held-out stream"
+}

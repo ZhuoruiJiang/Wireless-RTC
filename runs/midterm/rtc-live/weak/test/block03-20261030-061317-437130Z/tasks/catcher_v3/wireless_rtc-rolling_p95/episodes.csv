@@ -1,0 +1,6 @@
+episode,status,error,success,steps,buffer_exhaustion_steps,deadline_overrun_steps,completed_requests,stale_requests,average_rtt_ms,rtt_samples,average_injected_delay_ms,injected_delay_samples,average_delay_sleep_ms,delay_sleep_samples,prediction_mae_ms,prediction_samples,rtt_prediction_mae_ms,rtt_prediction_samples,task,seed,block,calibration_inference_ms
+10,ok,,True,72,7,0,17,0,58.090329411617645,17,0.0,17,0.0,17,30.306387662267834,17,30.306387662267834,17,catcher_v3,52,3,
+11,ok,,False,56,18,0,12,0,71.88091666224257,12,0.0,12,0.0,12,39.3618508343449,12,39.3618508343449,12,catcher_v3,53,3,
+12,ok,,False,97,42,0,16,2,79.76517499992042,16,0.0,16,0.0,16,233.76144687021218,16,233.76144687021218,16,catcher_v3,54,3,
+13,ok,,True,63,0,0,16,0,12.031137503072387,16,0.0,16,0.0,16,5.085414678851521,16,5.085414678851521,16,catcher_v3,55,3,
+14,ok,,True,67,0,0,17,0,16.27660000539275,17,0.0,17,0.0,17,19.425593236399642,17,19.425593236399642,17,catcher_v3,56,3,

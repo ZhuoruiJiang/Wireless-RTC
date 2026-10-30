@@ -1,0 +1,8 @@
+setting,method,predictor,blocks,episodes_per_task,success_ci_low_pct,success_ci_high_pct,success_pct,deadline_miss_pct,expired_response_pct,fallback_tick_pct,boundary_jump_p95,step_underprediction_pct,step_overprediction_pct,mean_excess_steps,mean_prefix_steps
+weak,wireless_rtc,last_response,4.00,20.00,16.67,60.00,38.33,29.49,3.15,20.17,1.29,32.69,23.34,0.80,3.01
+weak,wireless_rtc,recent_max,4.00,20.00,33.33,53.33,40.00,25.00,2.71,17.03,1.25,5.57,65.25,2.77,5.32
+weak,wireless_rtc,rolling_p50,4.00,20.00,45.00,60.00,53.33,21.19,2.20,13.69,1.35,27.34,19.19,0.43,2.25
+weak,wireless_rtc,rolling_p70,4.00,20.00,33.33,53.33,45.00,21.64,1.19,12.81,1.33,17.56,33.13,0.83,2.80
+weak,wireless_rtc,rolling_p80,4.00,20.00,36.67,53.33,45.00,22.10,2.01,14.58,1.33,15.92,38.28,1.02,3.29
+weak,wireless_rtc,rolling_p90,4.00,20.00,36.67,53.33,45.00,23.77,2.03,13.70,1.36,7.62,56.16,1.45,4.03
+weak,wireless_rtc,rolling_p95,4.00,20.00,40.00,46.67,43.33,23.19,2.48,16.92,1.42,9.91,66.96,2.79,5.31

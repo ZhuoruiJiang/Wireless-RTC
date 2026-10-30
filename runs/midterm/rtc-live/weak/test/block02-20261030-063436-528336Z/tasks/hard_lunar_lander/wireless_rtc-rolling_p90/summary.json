@@ -1,0 +1,21 @@
+{
+  "task": "hard_lunar_lander",
+  "method": "wireless_rtc",
+  "predictor": "rolling_p90",
+  "predictor_basis": "response_rtt_ms",
+  "episodes": 5,
+  "successes": 5,
+  "solve_rate": 1.0,
+  "buffer_exhaustion_steps": 0,
+  "deadline_overrun_steps": 0,
+  "average_rtt_ms": 14.168550793935234,
+  "rtt_samples": 63,
+  "average_injected_delay_ms": 0.0,
+  "injected_delay_samples": 63,
+  "average_delay_sleep_ms": 0.0,
+  "delay_sleep_samples": 63,
+  "prediction_mae_ms": 9.73456396808153,
+  "prediction_samples": 63,
+  "rtt_prediction_mae_ms": 9.73456396808153,
+  "rtt_prediction_samples": 63
+}

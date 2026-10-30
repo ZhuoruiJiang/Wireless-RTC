@@ -1,0 +1,10 @@
+task,method,predictor,predictor_basis,episodes,successes,solve_rate,buffer_exhaustion_steps,deadline_overrun_steps,average_rtt_ms,rtt_samples,average_injected_delay_ms,injected_delay_samples,average_delay_sleep_ms,delay_sleep_samples,prediction_mae_ms,prediction_samples,rtt_prediction_mae_ms,rtt_prediction_samples
+catcher_v3,naive,none,none,20.00,3.00,0.15,223.00,1.00,49.03,324.00,37.42,324.00,37.50,324.00,,0.00,,0.00
+catcher_v3,rtc,recent_max,inference_ms,20.00,3.00,0.15,235.00,0.00,51.03,322.00,37.50,322.00,37.59,322.00,1.33,322.00,46.09,322.00
+catcher_v3,wireless_rtc,recent_max,response_rtt_ms,20.00,4.00,0.20,242.00,0.00,49.93,320.00,37.03,320.00,37.12,320.00,27.56,320.00,27.56,320.00
+hard_lunar_lander,naive,none,none,20.00,13.00,0.65,110.00,0.00,41.20,236.00,29.87,236.00,29.96,236.00,,0.00,,0.00
+hard_lunar_lander,rtc,recent_max,inference_ms,20.00,14.00,0.70,93.00,0.00,40.66,221.00,27.38,221.00,27.46,221.00,0.50,221.00,36.55,221.00
+hard_lunar_lander,wireless_rtc,recent_max,response_rtt_ms,20.00,15.00,0.75,109.00,0.00,41.69,231.00,29.00,231.00,29.08,231.00,21.34,231.00,21.34,231.00
+mjc_walker,naive,none,none,20.00,0.00,0.00,868.00,0.00,54.15,951.00,42.82,951.00,42.90,951.00,,0.00,,0.00
+mjc_walker,rtc,recent_max,inference_ms,20.00,0.00,0.00,980.00,0.00,56.01,987.00,42.79,987.00,42.87,987.00,0.84,987.00,51.58,987.00
+mjc_walker,wireless_rtc,recent_max,response_rtt_ms,20.00,0.00,0.00,1103.00,0.00,59.22,953.00,43.14,953.00,43.22,953.00,53.67,953.00,53.67,953.00

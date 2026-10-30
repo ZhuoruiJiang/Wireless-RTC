@@ -1,0 +1,2 @@
+method,predictor,predictor_basis,average_solve_rate,average_rtt_ms,rtt_samples,average_injected_delay_ms,injected_delay_samples,average_delay_sleep_ms,delay_sleep_samples,prediction_mae_ms,prediction_samples,rtt_prediction_mae_ms,rtt_prediction_samples,grasp_easy,cartpole_thrust,catcher_v3,hard_lunar_lander,mjc_walker
+rtc,recent_max,inference_ms,0.70,43.62,2089.00,0.00,2089.00,0.00,2089.00,0.50,2089.00,39.59,2089.00,1.00,1.00,0.70,0.55,0.25

@@ -1,0 +1,57 @@
+{
+  "config_path": "C:\\Users\\jack_\\OneDrive\\Desktop\\UT Austin\\CS386W\\project\\Wireless-RTC\\configs\\rollout_summary.json",
+  "config_sha256": "3b60de56d08999cd5654a58239f6709e0db6f875015cb60613b362d2df08c023",
+  "config": {
+    "schema_version": 1,
+    "base_dir": "..",
+    "allow_partial": false,
+    "runs": {
+      "strong": [
+        "runs/midterm/rtc-live/strong/test/block01-20261030-161359-884057Z"
+      ],
+      "weak": [
+        "runs/midterm/rtc-live/weak/test/block01-20261030-062717-156326Z",
+        "runs/midterm/rtc-live/weak/test/block02-20261030-063436-528336Z",
+        "runs/midterm/rtc-live/weak/test/block03-20261030-061317-437130Z",
+        "runs/midterm/rtc-live/weak/test/block04-20261030-061949-802322Z"
+      ]
+    }
+  },
+  "settings": [
+    "weak"
+  ],
+  "entries": [
+    {
+      "setting": "weak",
+      "path": "C:\\Users\\jack_\\OneDrive\\Desktop\\UT Austin\\CS386W\\project\\Wireless-RTC\\runs\\midterm\\rtc-live\\weak\\test\\block01-20261030-062717-156326Z",
+      "manifest_sha256": "df38b55b1657cb266b8d6f19231290d5c29e33c1a655e09937d00daa5e0529b6",
+      "saved_setting": "weak",
+      "saved_split": "test",
+      "saved_status": "completed"
+    },
+    {
+      "setting": "weak",
+      "path": "C:\\Users\\jack_\\OneDrive\\Desktop\\UT Austin\\CS386W\\project\\Wireless-RTC\\runs\\midterm\\rtc-live\\weak\\test\\block02-20261030-063436-528336Z",
+      "manifest_sha256": "b1e522844c979d2a2e47c61b31972c4b28479790f807180bfa55343d94a04bfc",
+      "saved_setting": "weak",
+      "saved_split": "test",
+      "saved_status": "completed"
+    },
+    {
+      "setting": "weak",
+      "path": "C:\\Users\\jack_\\OneDrive\\Desktop\\UT Austin\\CS386W\\project\\Wireless-RTC\\runs\\midterm\\rtc-live\\weak\\test\\block03-20261030-061317-437130Z",
+      "manifest_sha256": "3019c1ab890d73ccc8dcaa129a5ddf31819488097ce8468f3cda76931a2607c0",
+      "saved_setting": "weak",
+      "saved_split": "test",
+      "saved_status": "completed"
+    },
+    {
+      "setting": "weak",
+      "path": "C:\\Users\\jack_\\OneDrive\\Desktop\\UT Austin\\CS386W\\project\\Wireless-RTC\\runs\\midterm\\rtc-live\\weak\\test\\block04-20261030-061949-802322Z",
+      "manifest_sha256": "b7d2d99b2e18ebef63a44c7779fd602027097a651f864093651917436685b82e",
+      "saved_setting": "weak",
+      "saved_split": "test",
+      "saved_status": "completed"
+    }
+  ]
+}

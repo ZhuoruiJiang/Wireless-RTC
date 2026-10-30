@@ -1,0 +1,21 @@
+{
+  "task": "cartpole_thrust",
+  "method": "naive",
+  "predictor": "none",
+  "predictor_basis": "none",
+  "episodes": 20,
+  "successes": 3,
+  "solve_rate": 0.15,
+  "buffer_exhaustion_steps": 168,
+  "deadline_overrun_steps": 1,
+  "average_rtt_ms": 47.144839789146154,
+  "rtt_samples": 284,
+  "average_injected_delay_ms": 35.73943661971831,
+  "injected_delay_samples": 284,
+  "average_delay_sleep_ms": 35.81530996024425,
+  "delay_sleep_samples": 284,
+  "prediction_mae_ms": null,
+  "prediction_samples": 0,
+  "rtt_prediction_mae_ms": null,
+  "rtt_prediction_samples": 0
+}
